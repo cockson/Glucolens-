@@ -12,3 +12,4 @@ slowapi==0.1.9
 requests==2.31.0
 qrcode==7.4.2
 pillow==10.2.0
+pydantic[email]

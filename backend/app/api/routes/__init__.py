@@ -1,1 +1,1 @@
-from . import auth, tenancy, billing, referral, outcome
+from . import auth, tenancy, billing, referral, outcome, admin
