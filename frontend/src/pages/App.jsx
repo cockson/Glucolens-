@@ -12,6 +12,8 @@ import Billing from "./Billing.jsx";
 import BillingCallback from "./BillingCallback.jsx";
 import Facilities from "./Facilities.jsx";
 import ReferralView from "./ReferralView.jsx";
+import ReferralsList from "./ReferralsList.jsx";
+import OutcomesList from "./OutcomesList.jsx";
 
 function Protected({ children }) {
   const auth = getAuth();
@@ -37,7 +39,8 @@ export default function App() {
         <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
         <Route path="/billing" element={<Protected><Billing /></Protected>} />
         <Route path="/billing/callback" element={<Protected><BillingCallback /></Protected>} />
-
+        <Route path="/referrals" element={<Protected><ReferralsList /></Protected>} />
+        <Route path="/outcomes" element={<Protected><OutcomesList /></Protected>} />
         <Route path="/facilities" element={<Facilities />} />
         <Route path="/referral/:id" element={<Protected><ReferralView /></Protected>} />
 

@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     JWT_REFRESH_TTL_DAYS: int = 30
 
     CORS_ALLOW_ORIGINS: str = "http://localhost:5173"
-
+    SETUP_TOKEN: str = ""
     PAYSTACK_SECRET_KEY: str = ""
     PAYSTACK_PUBLIC_KEY: str = ""
     PAYSTACK_WEBHOOK_SECRET: str = ""

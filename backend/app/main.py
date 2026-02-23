@@ -5,6 +5,8 @@ from app.api.routes import admin
 from app.core.config import settings
 from app.db.init_db import init_db
 from app.api.routes import auth, tenancy, billing, referral, outcome
+from app.api.routes import audit
+
 
 # Optional: rate limiting (only enable if limiter exists)
 try:
@@ -73,3 +75,4 @@ app.include_router(billing.router, prefix="/api/billing", tags=["billing"])
 app.include_router(referral.router, prefix="/api/referrals", tags=["referrals"])
 app.include_router(outcome.router, prefix="/api/outcomes", tags=["outcomes"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+app.include_router(audit.router, prefix="/api/audit", tags=["audit"])

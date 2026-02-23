@@ -6,6 +6,10 @@ from app.db.session import get_db
 from app.db.models import User, Role
 from app.core.security import hash_password
 
+from fastapi import Header
+from app.core.config import settings
+
+
 router = APIRouter()
 
 def _uuid() -> str:
@@ -39,3 +43,8 @@ def seed_super_admin(payload: dict, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     return {"ok": True, "created": True}
+
+@router.post("/seed-super-admin")
+def seed_super_admin(payload: dict, x_setup_token: str | None = Header(default=None), db: Session = Depends(get_db)):
+    if not settings.SETUP_TOKEN or x_setup_token != settings.SETUP_TOKEN:
+        raise HTTPException(status_code=403, detail="Forbidden")

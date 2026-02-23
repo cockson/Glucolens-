@@ -81,3 +81,16 @@ def accept_referral(referral_id: str, db: Session = Depends(get_db), user: User 
 
     db.commit()
     return {"ok": True, "status": row.status, "to_facility_id": row.to_facility_id}
+
+@router.get("/")
+def list_referrals(db: Session = Depends(get_db), user: User = Depends(require_active_subscription)):
+    rows = db.query(Referral).filter(Referral.org_id == user.org_id).order_by(Referral.created_at.desc()).limit(200).all()
+    return [{
+        "id": r.id,
+        "status": r.status,
+        "patient_key": r.patient_key,
+        "risk_score": r.risk_score,
+        "from_facility_id": r.from_facility_id,
+        "to_facility_id": r.to_facility_id,
+        "created_at": r.created_at.isoformat(),
+    } for r in rows]

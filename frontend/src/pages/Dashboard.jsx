@@ -50,6 +50,8 @@ export default function Dashboard(){
         </p>
         <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
           <Link className="btn" to="/referrals/new">Create Referral</Link>
+          <Link className="btn secondary" to="/referrals">Referrals List</Link>
+          <Link className="btn secondary" to="/outcomes">Outcomes List</Link>
           <Link className="btn secondary" to="/outcomes/new">Record Outcome</Link>
           <Link className="btn" to="/billing">Billing</Link>
           <Link className="btn secondary" to="/facilities">Facility Finder</Link>
