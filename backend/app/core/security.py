@@ -6,7 +6,8 @@ from passlib.context import CryptContext
 
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use a stable passlib-native scheme to avoid bcrypt backend version issues.
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 ALGORITHM = "HS256"
 
@@ -17,7 +18,8 @@ def verify_password(password: str, password_hash: str) -> bool:
     return pwd_context.verify(password, password_hash)
 
 def create_access_token(subject: str, role: str, org_id: str | None, facility_id: str | None) -> str:
-    now = dt.datetime.utcnow()
+    # Use timezone-aware UTC to avoid local-time reinterpretation issues.
+    now = dt.datetime.now(dt.timezone.utc)
     exp = now + dt.timedelta(minutes=settings.JWT_ACCESS_TTL_MIN)
     payload = {
         "sub": subject,

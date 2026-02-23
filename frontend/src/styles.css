@@ -1,7 +1,7 @@
 :root {
-  --bg: #0b1220;
+  --bg: #0c0202;
   --glass: rgba(255,255,255,0.08);
-  --border: rgba(255,255,255,0.16);
+  --border: rgba(255, 255, 255, 0.16);
   --text: #e9eefc;
   --muted: rgba(233,238,252,0.7);
   --accent: #ff4500; /* orangered */

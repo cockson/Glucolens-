@@ -38,7 +38,7 @@ export default function RegisterBusiness() {
             <input className="input" type="password" value={form.password} onChange={e=>set("password", e.target.value)} />
           </div>
           <div>
-            <label className="small">Org Name</label>
+            <label className="small">Organization Name</label>
             <input className="input" value={form.org_name} onChange={e=>set("org_name", e.target.value)} />
           </div>
           <div>

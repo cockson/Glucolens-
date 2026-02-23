@@ -1,14 +1,22 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../lib/api";
+import Locked from "./Locked.jsx";
+import { isLockedError, lockedMessage } from "../lib/errors";
 
 export default function ReferralView(){
   const { id } = useParams();
   const [ref,setRef]=useState(null);
   const [err,setErr]=useState("");
+  const [locked,setLocked]=useState(null);
 
   useEffect(()=>{
-    api.get(`/api/referrals/${id}`).then(r=>setRef(r.data)).catch(e=>setErr(e?.response?.data?.detail || "Failed"));
+    api.get(`/api/referrals/${id}`)
+      .then(r=>setRef(r.data))
+      .catch(e=>{
+        if (isLockedError(e)) setLocked(lockedMessage(e));
+        else setErr(e?.response?.data?.detail || "Failed");
+      });
   },[id]);
 
   async function accept(){
@@ -17,9 +25,12 @@ export default function ReferralView(){
       const res = await api.post(`/api/referrals/${id}/accept`);
       setRef(prev=>({ ...prev, status: res.data.status, to_facility_id: res.data.to_facility_id }));
     }catch(e){
-      setErr(e?.response?.data?.detail || "Accept failed");
+      if (isLockedError(e)) setLocked(lockedMessage(e));
+      else setErr(e?.response?.data?.detail || "Accept failed");
     }
   }
+
+  if (locked) return <Locked message={locked} />;
 
   return (
     <div className="container">

@@ -1,0 +1,23 @@
+{
+  "NG": {
+    "en": {
+      "version": "1.0",
+      "title": "Consent for Screening",
+      "body": "You consent to diabetes risk screening. This does not replace laboratory diagnosis. Data may be used to improve service quality if you opt in.",
+      "checkboxes": [
+        { "id": "clinical", "label": "I understand this is a screening tool, not a diagnosis.", "required": true },
+        { "id": "analytics", "label": "I allow anonymized analytics to improve the system.", "required": false }
+      ]
+    }
+  },
+  "KE": {
+    "en": {
+      "version": "1.0",
+      "title": "Consent for Screening",
+      "body": "You consent to diabetes risk screening. This does not replace laboratory diagnosis.",
+      "checkboxes": [
+        { "id": "clinical", "label": "I understand this is a screening tool, not a diagnosis.", "required": true }
+      ]
+    }
+  }
+}

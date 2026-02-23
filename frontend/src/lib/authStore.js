@@ -33,13 +33,24 @@ api.interceptors.response.use(
   (r) => r,
   async (err) => {
     const status = err?.response?.status;
-    const isAuthCall = err?.config?.url?.includes("/api/auth/");
-    if (status === 401 && !isAuthCall) {
-      if (!refreshing) refreshing = refreshToken().finally(() => (refreshing = null));
-      await refreshing;
-      err.config.headers.Authorization = api.defaults.headers.common.Authorization;
-      return api.request(err.config);
+    const url = err?.config?.url || "";
+    const isRefreshCall = url.includes("/api/auth/refresh");
+    const isLoginCall = url.includes("/api/auth/login");
+    const isRegisterCall = url.includes("/api/auth/register-");
+    const isLogoutCall = url.includes("/api/auth/logout");
+    const hasRefreshToken = !!getAuth()?.refresh_token;
+
+    if (status === 401 && !isRefreshCall && !isLoginCall && !isRegisterCall && !isLogoutCall && hasRefreshToken) {
+      try {
+        if (!refreshing) refreshing = refreshToken().finally(() => (refreshing = null));
+        await refreshing;
+        err.config.headers.Authorization = api.defaults.headers.common.Authorization;
+        return api.request(err.config);
+      } catch {
+        clearAuth();
+      }
     }
+
     return Promise.reject(err);
   }
 );

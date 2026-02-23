@@ -32,6 +32,39 @@ def _interval_paystack(interval: str) -> str:
     # Paystack uses 'monthly' and 'annually'
     return interval
 
+def _all_plan_combos() -> list[tuple[str, str]]:
+    return [
+        ("pharmacy", "monthly"),
+        ("pharmacy", "annually"),
+        ("clinic", "monthly"),
+        ("clinic", "annually"),
+        ("hospital", "monthly"),
+        ("hospital", "annually"),
+    ]
+
+def _ensure_default_plans(db: Session) -> None:
+    # Ensure local billing plans exist even before explicit bootstrap.
+    for tier, interval in _all_plan_combos():
+        plan = db.query(BillingPlan).filter(
+            BillingPlan.tier == tier,
+            BillingPlan.interval == interval,
+        ).first()
+        if not plan:
+            db.add(BillingPlan(
+                id=_uuid(),
+                tier=tier,
+                interval=interval,
+                amount_kobo=_plan_price_kobo(tier, interval),
+                currency="NGN",
+                paystack_plan_code=None,
+                is_active=True,
+            ))
+        else:
+            # Keep amounts synced with config values.
+            plan.amount_kobo = _plan_price_kobo(tier, interval)
+            plan.is_active = True
+    db.commit()
+
 @router.post("/plans/bootstrap", response_model=BootstrapOut)
 def bootstrap_plans(
     request: Request,
@@ -99,6 +132,7 @@ def bootstrap_plans(
 
 @router.get("/plans", response_model=list[PlanOut])
 def list_plans(db: Session = Depends(get_db)):
+    _ensure_default_plans(db)
     plans = db.query(BillingPlan).filter(BillingPlan.is_active == True).all()  # noqa
     return [
         PlanOut(
@@ -110,6 +144,27 @@ def list_plans(db: Session = Depends(get_db)):
         )
         for p in plans
     ]
+
+@router.get("/subscription/me")
+def my_subscription_status(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if user.role == Role.public:
+        return {"required": False, "active": True, "status": "public_free"}
+
+    if user.role == Role.super_admin:
+        return {"required": False, "active": True, "status": "super_admin_bypass"}
+
+    if not user.org_id:
+        return {"required": True, "active": False, "status": "missing_org"}
+
+    sub = db.query(BillingSubscription).filter(BillingSubscription.org_id == user.org_id).first()
+    if not sub:
+        return {"required": True, "active": False, "status": "inactive"}
+
+    status = sub.status.value
+    return {"required": True, "active": status == "active", "status": status}
 
 @router.post("/checkout/initialize", response_model=CheckoutInitOut)
 def initialize_checkout(
@@ -135,7 +190,22 @@ def initialize_checkout(
         BillingPlan.is_active == True,  # noqa
     ).first()
 
-    if not plan or not plan.paystack_plan_code:
+    if not plan:
+        raise HTTPException(status_code=400, detail="Billing plan not available")
+
+    if not plan.paystack_plan_code:
+        name = f"GL_{plan.tier.upper()}_{plan.interval.upper()}"
+        resp = paystack.create_plan(
+            name=name,
+            amount_kobo=plan.amount_kobo,
+            interval=_interval_paystack(plan.interval),
+        )
+        if not resp.get("status"):
+            raise HTTPException(status_code=400, detail=f"Paystack plan create failed: {resp}")
+        plan.paystack_plan_code = resp["data"]["plan_code"]
+        db.commit()
+
+    if not plan.paystack_plan_code:
         raise HTTPException(status_code=400, detail="Billing plan not available")
 
     callback_url = f"{settings.FRONTEND_BASE_URL}/billing/callback"
@@ -179,7 +249,11 @@ def verify_checkout(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    resp = paystack.verify_transaction(reference)
+    try:
+        resp = paystack.verify_transaction(reference)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Verify failed: {e}")
+
     if not resp.get("status"):
         raise HTTPException(status_code=400, detail=f"Verify failed: {resp}")
 
@@ -204,15 +278,22 @@ def verify_checkout(
     if not customer_code:
         raise HTTPException(status_code=400, detail="Missing customer_code from Paystack verify")
 
-    # Create subscription
-    sub_resp = paystack.create_subscription(customer_code=customer_code, plan_code=plan_code)
-    if not sub_resp.get("status"):
-        raise HTTPException(status_code=400, detail=f"Subscription create failed: {sub_resp}")
-
-    sub_data = sub_resp["data"]
-    subscription_code = sub_data.get("subscription_code")
-    email_token = sub_data.get("email_token")
-    status = sub_data.get("status") or "active"
+    # Create subscription (best-effort). We should not fail verification if payment already succeeded.
+    subscription_code = None
+    email_token = None
+    status = "active"
+    sub_create_error = None
+    try:
+        sub_resp = paystack.create_subscription(customer_code=customer_code, plan_code=plan_code)
+        if sub_resp.get("status"):
+            sub_data = sub_resp.get("data") or {}
+            subscription_code = sub_data.get("subscription_code")
+            email_token = sub_data.get("email_token")
+            status = sub_data.get("status") or "active"
+        else:
+            sub_create_error = f"{sub_resp}"
+    except Exception as e:
+        sub_create_error = str(e)
 
     row = db.query(BillingSubscription).filter(BillingSubscription.org_id == org_id).first()
     if not row:
@@ -237,6 +318,12 @@ def verify_checkout(
         row.last_payment_at = dt.datetime.utcnow()
         row.status = SubscriptionStatus.active if status == "active" else SubscriptionStatus.incomplete
 
+    # Preserve existing subscription identifiers if create call did not return new ones.
+    if not row.paystack_subscription_code and subscription_code:
+        row.paystack_subscription_code = subscription_code
+    if not row.paystack_email_token and email_token:
+        row.paystack_email_token = email_token
+
     write_audit_log(
         db,
         actor_user_id=user.id,
@@ -244,7 +331,12 @@ def verify_checkout(
         facility_id=user.facility_id,
         action="billing.checkout.verify",
         resource="billing",
-        payload={"reference": reference, "subscription_code": subscription_code, "status": row.status.value},
+        payload={
+            "reference": reference,
+            "subscription_code": row.paystack_subscription_code,
+            "status": row.status.value,
+            "sub_create_error": sub_create_error,
+        },
         ip=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
     )

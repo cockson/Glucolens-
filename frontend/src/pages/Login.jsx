@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { api } from "../lib/api";
-import { setAuth } from "../lib/authStore";
+import { clearAuth, setAuth } from "../lib/authStore";
 import { useNavigate, Link } from "react-router-dom";
 
 export default function Login() {
@@ -12,12 +12,22 @@ export default function Login() {
   async function submit(e) {
     e.preventDefault();
     setErr("");
+    // Prevent stale tokens from interfering with a fresh login attempt.
+    clearAuth();
     try {
-      const res = await api.post("/api/auth/login", { email, password });
+      const res = await api.post("/api/auth/login", {
+        email: email.trim().toLowerCase(),
+        password,
+      });
       setAuth(res.data);
+      // Enrich auth store with role/org metadata used by billing/dashboard.
+      const me = await api.get("/api/auth/me");
+      setAuth({ ...res.data, ...me.data });
       nav("/dashboard");
     } catch (e2) {
-      setErr(e2?.response?.data?.detail || "Login failed");
+      const status = e2?.response?.status;
+      const detail = e2?.response?.data?.detail || e2?.message || "Login failed";
+      setErr(`${status ? `${status} ` : ""}${detail}`);
     }
   }
 

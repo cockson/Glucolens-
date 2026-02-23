@@ -27,7 +27,8 @@ def _uuid() -> str:
 
 
 def _utcnow():
-    return dt.datetime.now(dt.timezone.utc)
+    # Keep naive UTC to match DB timestamp columns and avoid naive/aware compare errors.
+    return dt.datetime.utcnow()
 
 
 # ---------- Public Registration ----------
@@ -104,6 +105,7 @@ def register_business(request: Request, payload: RegisterBusinessIn, db: Session
             role=Role.org_admin,
             org_id=org.id,
             facility_id=facility.id,
+            
         )
         db.add(user)
         db.commit()
