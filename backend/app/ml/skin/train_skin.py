@@ -1,10 +1,11 @@
-import os, json, datetime as dt
+import os, json, csv, datetime as dt
 import numpy as np
 from joblib import dump
+from PIL import Image
 
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
 
@@ -16,6 +17,68 @@ from app.ml.skin.model import build_skin_model
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 ART_DIR = os.path.join(REPO_ROOT, "artifacts", "skin")
 os.makedirs(ART_DIR, exist_ok=True)
+
+
+class CsvSkinDataset(Dataset):
+    """Dataset for flat image folders with labels in a CSV file."""
+    def __init__(self, images_dir, labels_csv, transform):
+        self.images_dir = images_dir
+        self.transform = transform
+        self.samples = []
+
+        with open(labels_csv, "r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                fname = row.get("filename")
+                if not fname:
+                    continue
+
+                image_path = os.path.join(images_dir, fname)
+                if not os.path.exists(image_path):
+                    continue
+
+                # Positive class is Acanthosis Nigricans.
+                y = None
+                if "Acanthosis Nigricans" in row and "Healthy" in row:
+                    try:
+                        y = int(float(row["Acanthosis Nigricans"]) > float(row["Healthy"]))
+                    except (TypeError, ValueError):
+                        y = None
+                elif "Acanthosis Nigricans" in row:
+                    try:
+                        y = int(float(row["Acanthosis Nigricans"]) >= 0.5)
+                    except (TypeError, ValueError):
+                        y = None
+
+                if y is None:
+                    continue
+
+                self.samples.append((image_path, y))
+
+        if not self.samples:
+            raise ValueError(f"No labeled samples loaded from {labels_csv}")
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        image_path, y = self.samples[idx]
+        with Image.open(image_path) as img:
+            x = self.transform(img.convert("RGB"))
+        return x, y
+
+
+def _pick_first_existing(paths):
+    for p in paths:
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def _has_class_subdirs(path):
+    if not os.path.isdir(path):
+        return False
+    return any(entry.is_dir() for entry in os.scandir(path))
 
 def softmax_np(logits):
     e = np.exp(logits - logits.max(axis=1, keepdims=True))
@@ -72,9 +135,11 @@ def train_one_epoch(model, loader, opt, device):
 def main():
     root = os.path.join(REPO_ROOT, "data", "skin")
     tr_dir = os.path.join(root,"train")
-    va_dir = os.path.join(root,"val")
-    if not os.path.exists(tr_dir) or not os.path.exists(va_dir):
-        raise SystemExit("Expected backend/data/skin/train and backend/data/skin/val")
+    va_dir = _pick_first_existing([os.path.join(root, "val"), os.path.join(root, "valid")])
+    if not os.path.exists(tr_dir) or va_dir is None:
+        raise SystemExit(
+            f"Missing dataset directories. Expected train={tr_dir} and val/valid under {root}"
+        )
 
     tfm = transforms.Compose([
         transforms.Resize((224,224)),
@@ -82,8 +147,23 @@ def main():
         transforms.Normalize(mean=[0.485,0.456,0.406], std=[0.229,0.224,0.225]),
     ])
 
-    ds_tr = ImageFolder(tr_dir, transform=tfm)
-    ds_va = ImageFolder(va_dir, transform=tfm)
+    use_imagefolder = _has_class_subdirs(tr_dir) and _has_class_subdirs(va_dir)
+    if use_imagefolder:
+        ds_tr = ImageFolder(tr_dir, transform=tfm)
+        ds_va = ImageFolder(va_dir, transform=tfm)
+        print(f"Using ImageFolder layout: train={tr_dir}, val={va_dir}")
+    else:
+        labels_dir = os.path.join(root, "labels")
+        tr_csv = os.path.join(labels_dir, "train_labels.csv")
+        va_name = os.path.basename(va_dir)
+        va_csv = os.path.join(labels_dir, f"{va_name}_labels.csv")
+        if not os.path.exists(tr_csv) or not os.path.exists(va_csv):
+            raise SystemExit(
+                f"Flat-folder dataset detected, but label CSVs were not found: {tr_csv}, {va_csv}"
+            )
+        ds_tr = CsvSkinDataset(tr_dir, tr_csv, tfm)
+        ds_va = CsvSkinDataset(va_dir, va_csv, tfm)
+        print(f"Using CSV layout: train={tr_dir} ({tr_csv}), val={va_dir} ({va_csv})")
 
     dl_tr = DataLoader(ds_tr, batch_size=16, shuffle=True, num_workers=0)
     dl_va = DataLoader(ds_va, batch_size=16, shuffle=False, num_workers=0)

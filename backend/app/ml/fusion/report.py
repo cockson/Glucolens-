@@ -13,6 +13,7 @@ def render_fusion_report_pdf(out: dict) -> bytes:
     fused = out.get("fusion", {})
     tab = out.get("tabular", {})
     ret = out.get("retina", {})
+    skin = out.get("skin", {})
 
     c.setFont("Helvetica-Bold", 16)
     c.drawString(2*cm, y, "GlucoLens — Fusion Screening Report (Tabular + Retina)")
@@ -74,6 +75,32 @@ def render_fusion_report_pdf(out: dict) -> bytes:
             y -= 0.45*cm
 
         overlay_b64 = (ret.get("explainability") or {}).get("overlay_png_base64")
+        if overlay_b64:
+            img_bytes = base64.b64decode(overlay_b64.encode("utf-8"))
+            img = ImageReader(io.BytesIO(img_bytes))
+            c.drawImage(img, 2*cm, y-10*cm, width=14*cm, height=10*cm, preserveAspectRatio=True, mask="auto")
+            y -= 10.5*cm
+
+    # Skin section
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(2*cm, y, "Skin (if provided)")
+    y -= 0.6*cm
+    c.setFont("Helvetica", 10)
+
+    if not skin:
+        c.drawString(2*cm, y, "No skin image provided.")
+        y -= 0.45*cm
+    else:
+        qp = (skin.get("quality_gate") or {}).get("passed")
+        c.drawString(2*cm, y, f"Quality gate passed: {qp}")
+        y -= 0.45*cm
+
+        sprobs = skin.get("probabilities", {})
+        if sprobs.get("positive") is not None:
+            c.drawString(2*cm, y, f"P(skin proxy positive): {float(sprobs.get('positive')):.3f}")
+            y -= 0.45*cm
+
+        overlay_b64 = (skin.get("explainability") or {}).get("overlay_png_base64")
         if overlay_b64:
             img_bytes = base64.b64decode(overlay_b64.encode("utf-8"))
             img = ImageReader(io.BytesIO(img_bytes))

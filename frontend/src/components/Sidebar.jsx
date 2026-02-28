@@ -10,6 +10,7 @@ const NAV = [
       { to: "/screening/fusion", label: "Fusion" },
       { to: "/screening/retina", label: "Retina" },
       { to: "/screening/skin", label: "Skin" },
+      { to: "/screening/genomics", label: "Genomics" },
     ],
   },
   {
@@ -33,6 +34,7 @@ const NAV = [
     items: [
       { to: "/models/tabular", label: "Tabular Model Card" },
       { to: "/models/retina", label: "Retina Model Card" },
+      { to: "/models/genomics", label: "Genomics Model Card" },
       { to: "/quick-check", label: "Public Quick-Check" },
     ],
   },

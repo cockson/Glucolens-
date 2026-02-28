@@ -74,10 +74,10 @@ export default function Dashboard(){
           <h3 style={{ marginTop: 0 }}>Screening</h3>
           <p className="small">Run clinical screening workflows.</p>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <Link className="btn" to="/screening/tabular">Tabular</Link>
-            <Link className="btn" to="/screening/fusion">Fusion</Link>
-            <Link className="btn secondary" to="/screening/retina">Retina</Link>
-            <Link className="btn secondary" to="/screening/skin">Skin</Link>
+            <Link className="btn" to="/screening/tabular">Tabular Mode</Link>
+            <Link className="btn" to="/screening/fusion">Multi-Mode </Link>
+            <Link className="btn secondary" to="/screening/retina">Retina Mode</Link>
+            <Link className="btn secondary" to="/screening/skin">Skin Mode</Link>
           </div>
         </div>
 

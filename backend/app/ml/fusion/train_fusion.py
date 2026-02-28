@@ -37,22 +37,50 @@ def main():
     df = df.dropna(subset=["p_tabular","label"])
     if df.empty:
         raise SystemExit("fusion_train.csv has no usable rows after dropna. Check required columns.")
-    # retina optional
+
+    # Optional modality columns may be absent in older exports.
+    for col, default in (("p_retina", 0.0), ("retina_ok", 0), ("p_skin", 0.0), ("skin_ok", 0), ("p_genomics", 0.0), ("geno_ok", 0)):
+        if col not in df.columns:
+            df[col] = default
+
+    # retina/skin optional
     df["p_retina"] = df["p_retina"].fillna(0.0)
     df["retina_ok"] = df["retina_ok"].fillna(0).astype(int)
+    df["p_skin"] = df["p_skin"].fillna(0.0)
+    df["skin_ok"] = df["skin_ok"].fillna(0).astype(int)
+    df["p_genomics"] = df["p_genomics"].fillna(0.0)
+    df["geno_ok"] = df["geno_ok"].fillna(0).astype(int)
 
-    X = df[["p_tabular","p_retina","retina_ok"]].values
+    X = df[["p_tabular","p_retina","retina_ok","p_skin","skin_ok","p_genomics","geno_ok"]].values
     y = df["label"].astype(int).values
 
-    outer = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    uniq, counts = np.unique(y, return_counts=True)
+    if len(uniq) < 2:
+        raise SystemExit("fusion_train.csv needs at least 2 classes in label for training.")
+
+    min_class_n = int(counts.min())
+    n_samples = int(len(y))
+    outer_splits = min(5, n_samples, min_class_n)
+    calibration_method = "isotonic" if n_samples >= 100 else "sigmoid"
     oof = np.zeros(len(df), dtype=float)
 
-    for tr, va in outer.split(X, y):
+    if outer_splits >= 2:
+        outer = StratifiedKFold(n_splits=outer_splits, shuffle=True, random_state=42)
+        for tr, va in outer.split(X, y):
+            base = LogisticRegression(max_iter=600, class_weight="balanced")
+            base.fit(X[tr], y[tr])
+            # Fold-level calibration can fail on very tiny validation folds.
+            if len(np.unique(y[va])) >= 2 and len(va) >= 2:
+                cal = CalibratedClassifierCV(base, method=calibration_method, cv="prefit")
+                cal.fit(X[va], y[va])
+                oof[va] = cal.predict_proba(X[va])[:,1]
+            else:
+                oof[va] = base.predict_proba(X[va])[:,1]
+    else:
+        # Not enough data for stratified CV; use training probabilities as fallback.
         base = LogisticRegression(max_iter=600, class_weight="balanced")
-        base.fit(X[tr], y[tr])
-        cal = CalibratedClassifierCV(base, method="isotonic", cv="prefit")
-        cal.fit(X[va], y[va])
-        oof[va] = cal.predict_proba(X[va])[:,1]
+        base.fit(X, y)
+        oof = base.predict_proba(X)[:,1]
 
     auroc = float(roc_auc_score(y, oof)) if len(np.unique(y)) == 2 else None
     brier = float(brier_score_loss(y, oof))
@@ -60,22 +88,33 @@ def main():
     f1 = float(f1_score(y, (oof>=0.5).astype(int)))
 
     # Fit final
-    base = LogisticRegression(max_iter=600, class_weight="balanced")
-    base.fit(X, y)
-    cal = CalibratedClassifierCV(base, method="isotonic", cv=5)
-    cal.fit(X, y)
+    final_cv = min(5, n_samples, min_class_n)
+    if final_cv >= 2:
+        cal = CalibratedClassifierCV(
+            LogisticRegression(max_iter=600, class_weight="balanced"),
+            method=calibration_method,
+            cv=final_cv,
+        )
+        cal.fit(X, y)
+        estimator = cal
+        calibration_used = calibration_method
+    else:
+        base = LogisticRegression(max_iter=600, class_weight="balanced")
+        base.fit(X, y)
+        estimator = base
+        calibration_used = "none"
 
     version = dt.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    model_name = "fusion_logreg_isotonic"
+    model_name = "fusion_logreg_v3"
 
     bundle = {
         "model_name": model_name,
         "model_version": version,
-        "features": ["p_tabular","p_retina","retina_ok"],
+        "features": ["p_tabular","p_retina","retina_ok","p_skin","skin_ok","p_genomics","geno_ok"],
         "classes": ["screen_negative","screen_positive_refer"],
-        "calibration": "isotonic",
+        "calibration": calibration_used,
         "metrics_oof": {"auroc": auroc, "brier": brier, "accuracy": acc, "f1": f1},
-        "estimator": cal
+        "estimator": estimator
     }
 
     dump(bundle, os.path.join(ART_DIR, f"{model_name}_{version}.joblib"))

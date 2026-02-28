@@ -6,7 +6,7 @@ from app.db.models import Outcome, PredictionRecord
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 OUT = os.path.join(REPO_ROOT, "data", "fusion_train.csv")
-COLUMNS = ["p_tabular", "p_retina", "retina_ok", "label"]
+COLUMNS = ["p_tabular", "p_retina", "retina_ok", "p_skin", "skin_ok", "label"]
 
 
 def _has_outcome_linked_prediction_id(db) -> bool:
@@ -139,9 +139,32 @@ def main():
                 except Exception:
                     retina_ok = 0
 
+            qskin = db.query(PredictionRecord).filter(
+                PredictionRecord.org_id == rec.org_id,
+                PredictionRecord.modality == "skin",
+                PredictionRecord.input_json.contains(o.patient_key if has_link_col else o["patient_key"])
+            ).order_by(PredictionRecord.created_at.desc()).first()
+
+            p_skin = None
+            skin_ok = 0
+            if qskin:
+                try:
+                    s = json.loads(qskin.output_json or "{}")
+                except Exception:
+                    s = {}
+                p_skin = (s.get("probabilities", {}) or {}).get("positive")  # skin uses positive/negative
+                skin_ok = 1 if (s.get("quality_gate", {}) or {}).get("passed") else 0
+
             outcome_label = o.outcome_label if has_link_col else o["outcome_label"]
             label = 1 if outcome_label in ["confirmed_t2d"] else 0
-            rows.append({"p_tabular": float(p_tab), "p_retina": (float(p_ret) if p_ret is not None else None), "retina_ok": int(retina_ok), "label": int(label)})
+            rows.append({
+                "p_tabular": float(p_tab),
+                "p_retina": (float(p_ret) if p_ret is not None else None),
+                "retina_ok": int(retina_ok),
+                "p_skin": (float(p_skin) if p_skin is not None else None),
+                "skin_ok": int(skin_ok),
+                "label": int(label)
+            })
 
         df = pd.DataFrame(rows, columns=COLUMNS)
         os.makedirs(os.path.dirname(OUT), exist_ok=True)

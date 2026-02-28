@@ -25,6 +25,8 @@ import RetinaInsights from "./RetinaInsights.jsx";
 import FusionScreening from "./FusionScreening.jsx";
 import ThresholdGovernance from "./ThresholdGovernance.jsx";
 import SkinScreening from "./SkinScreening.jsx";
+import GenomicsScreening from "./GenomicsScreening.jsx";
+import GenomicsInsights from "./GenomicsInsights.jsx";
 
 
 
@@ -70,6 +72,8 @@ export default function App() {
             <Route path="/screening/fusion" element={<Protected><FusionScreening /></Protected>} />
             <Route path="/governance/thresholds" element={<Protected><ThresholdGovernance /></Protected>} />
             <Route path="/screening/skin" element={<Protected><SkinScreening /></Protected>} />
+            <Route path="/screening/genomics" element={<Protected><GenomicsScreening /></Protected>} />
+            <Route path="/models/genomics" element={<Protected><GenomicsInsights /></Protected>} />
           </Routes>
         </div>
       </div>

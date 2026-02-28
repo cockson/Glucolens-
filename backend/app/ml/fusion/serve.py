@@ -29,11 +29,21 @@ def get_fusion_bundle():
         _cached["bundle"] = load(model_path)
     return _cached["bundle"]
 
-def fusion_predict(p_tabular: float | None, p_retina: float | None, retina_ok: bool, threshold: float):
+def fusion_predict(
+    p_tabular: float | None,
+    p_retina: float | None,
+    retina_ok: bool,
+    p_skin: float | None = None,
+    skin_ok: bool = False,
+    p_genomics: float | None = None,
+    geno_ok: bool = False,
+    threshold: float = 0.5,
+):
     """
     Abstain policy:
     - if tabular missing -> insufficient_data
     - if retina provided but quality failed -> retake_image
+    - if skin provided but quality failed -> retake_image
     - if confidence near threshold -> refer (conservative)
     """
     if p_tabular is None:
@@ -41,6 +51,10 @@ def fusion_predict(p_tabular: float | None, p_retina: float | None, retina_ok: b
 
     if p_retina is not None and not retina_ok:
         return {"final_label":"retake_image", "final_proba": None, "reason":"retina_quality_failed"}
+    if p_skin is not None and not skin_ok:
+        return {"final_label":"retake_image", "final_proba": None, "reason":"skin_quality_failed"}
+    if p_genomics is not None and not geno_ok:
+        return {"final_label":"retake_image", "final_proba": None, "reason":"genomics_quality_failed"}
 
     # If trained fusion artifacts are unavailable, degrade gracefully to tabular-only.
     try:
@@ -49,7 +63,11 @@ def fusion_predict(p_tabular: float | None, p_retina: float | None, retina_ok: b
         x = np.array([[
             float(p_tabular),
             float(p_retina) if p_retina is not None else 0.0,
-            1 if retina_ok else 0
+            1 if retina_ok else 0,
+            float(p_skin) if p_skin is not None else 0.0,
+            1 if skin_ok else 0,
+            float(p_genomics) if p_genomics is not None else 0.0,
+            1 if geno_ok else 0,
         ]])
         proba = float(est.predict_proba(x)[:,1][0])
         reason = "fusion"

@@ -9,7 +9,7 @@ from app.api.routes import audit
 from app.api.routes import predict
 from app.api.routes import monitor
 from app.api.routes import validation
-from app.api.routes import fusion, thresholds, skin
+from app.api.routes import fusion, thresholds, skin, genomics
 import redis.asyncio as redis
 from fastapi_limiter import FastAPILimiter
 from app.middleware.security_headers import SecurityHeadersMiddleware
@@ -96,3 +96,4 @@ app.include_router(retina.router, prefix="/api/retina", tags=["retina"])
 app.include_router(fusion.router, prefix="/api/fusion", tags=["fusion"])
 app.include_router(thresholds.router, prefix="/api/thresholds", tags=["thresholds"])
 app.include_router(skin.router, prefix="/api/skin", tags=["skin"])
+app.include_router(genomics.router, prefix="/api/genomics", tags=["genomics"])
