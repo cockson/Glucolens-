@@ -8,11 +8,17 @@ export default function ReferralView(){
   const { id } = useParams();
   const [ref,setRef]=useState(null);
   const [err,setErr]=useState("");
+  const [note,setNote]=useState("");
+  const [busy,setBusy]=useState(false);
   const [locked,setLocked]=useState(null);
 
+  async function fetchReferral(){
+    const r = await api.get(`/api/referrals/${id}`);
+    setRef(r.data);
+  }
+
   useEffect(()=>{
-    api.get(`/api/referrals/${id}`)
-      .then(r=>setRef(r.data))
+    fetchReferral()
       .catch(e=>{
         if (isLockedError(e)) setLocked(lockedMessage(e));
         else setErr(e?.response?.data?.detail || "Failed");
@@ -21,12 +27,17 @@ export default function ReferralView(){
 
   async function accept(){
     setErr("");
+    setNote("");
+    setBusy(true);
     try{
-      const res = await api.post(`/api/referrals/${id}/accept`);
-      setRef(prev=>({ ...prev, status: res.data.status, to_facility_id: res.data.to_facility_id }));
+      await api.post(`/api/referrals/${id}/accept`);
+      await fetchReferral();
+      setNote("Referral accepted successfully.");
     }catch(e){
       if (isLockedError(e)) setLocked(lockedMessage(e));
       else setErr(e?.response?.data?.detail || "Accept failed");
+    }finally{
+      setBusy(false);
     }
   }
 
@@ -37,13 +48,16 @@ export default function ReferralView(){
       <div className="card">
         <h2>Referral</h2>
         {err && <p style={{ color:"#ff8080" }}>{err}</p>}
-        {!ref ? <p className="small">Loading…</p> : (
+        {note && <p className="small" style={{ color:"#9ad1ff" }}>{note}</p>}
+        {!ref ? <p className="small">Loading...</p> : (
           <>
             <p className="small">Status: <b>{ref.status}</b></p>
             <p className="small">Patient Key: {ref.patient_key}</p>
             <p className="small">Risk Score: {ref.risk_score}/100</p>
             <p className="small">Reason: {ref.reason}</p>
-            <button className="btn" onClick={accept} disabled={ref.status !== "open"}>Accept Referral</button>
+            <button className="btn" onClick={accept} disabled={busy || ref.status !== "open"}>
+              {busy ? "Accepting..." : "Accept Referral"}
+            </button>
           </>
         )}
       </div>

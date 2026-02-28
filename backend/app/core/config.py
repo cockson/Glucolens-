@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     FRONTEND_BASE_URL: str = "http://localhost:5173"
 
     DATABASE_URL: str
-    REDIS_URL: str
+    REDIS_URL: str = ""
 
     JWT_SECRET: str
     JWT_ACCESS_TTL_MIN: int = 15

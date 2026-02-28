@@ -1,18 +1,29 @@
 import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from app.db.models import Outcome
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from app.db.session import get_db
 from app.db.models import Outcome, User
 from app.api.deps_billing import require_active_subscription
+from app.services.linkage import link_outcome_to_prediction
 
 router = APIRouter()
 
 def _uuid() -> str:
     return str(uuid.uuid4())
 
+def _ensure_linked_prediction_column(db: Session):
+    # Lightweight in-app migration for older DBs.
+    try:
+        db.execute(text("ALTER TABLE outcomes ADD COLUMN IF NOT EXISTS linked_prediction_id VARCHAR"))
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+
 @router.post("/")
 def record_outcome(payload: dict, db: Session = Depends(get_db), user: User = Depends(require_active_subscription)):
+    _ensure_linked_prediction_column(db)
     row = Outcome(
         id=_uuid(),
         referral_id=payload.get("referral_id"),
@@ -24,7 +35,8 @@ def record_outcome(payload: dict, db: Session = Depends(get_db), user: User = De
     )
     db.add(row)
     db.commit()
-    return {"id": row.id, "ok": True}
+    new_id = link_outcome_to_prediction(db, row)
+    return {"ok": True, "linked_prediction_id": new_id}
 
 @router.get("/")
 def list_outcomes(db: Session = Depends(get_db), user: User = Depends(require_active_subscription)):

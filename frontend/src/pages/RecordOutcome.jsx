@@ -1,9 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import Locked from "./Locked.jsx";
 import { isLockedError, lockedMessage } from "../lib/errors";
+import { useSearchParams } from "react-router-dom";
 
 export default function RecordOutcome(){
+  const [params] = useSearchParams();
   const [patientKey, setPatientKey] = useState("");
   const [referralId, setReferralId] = useState("");
   const [label, setLabel] = useState("confirmed_t2d");
@@ -11,6 +13,13 @@ export default function RecordOutcome(){
   const [ok, setOk] = useState(false);
   const [err, setErr] = useState("");
   const [locked, setLocked] = useState(null);
+
+  useEffect(() => {
+    const pk = params.get("patient_key") || "";
+    const rid = params.get("referral_id") || "";
+    if (pk) setPatientKey(pk);
+    if (rid) setReferralId(rid);
+  }, [params]);
 
   async function submit(){
     setErr(""); setOk(false);
@@ -54,7 +63,7 @@ export default function RecordOutcome(){
 
         <label className="small">Outcome label</label>
         <select className="input" value={label} onChange={e=>setLabel(e.target.value)}>
-          <option value="confirmed_t2d">Confirmed T2D</option>
+          <option value="confirmed_t2d">Confirmed Type 2 Diabetes</option>
           <option value="confirmed_not_diabetic">Confirmed Not Diabetic</option>
           <option value="prediabetes">Prediabetes</option>
           <option value="unknown">Unknown / Not confirmed</option>

@@ -6,6 +6,15 @@ from app.core.config import settings
 from app.db.init_db import init_db
 from app.api.routes import auth, tenancy, billing, referral, outcome
 from app.api.routes import audit
+from app.api.routes import predict
+from app.api.routes import monitor
+from app.api.routes import validation
+from app.api.routes import fusion, thresholds, skin
+import redis.asyncio as redis
+from fastapi_limiter import FastAPILimiter
+from app.middleware.security_headers import SecurityHeadersMiddleware
+from app.api.routes import retina
+
 
 
 # Optional: rate limiting (only enable if limiter exists)
@@ -19,6 +28,7 @@ except Exception:
 
 
 app = FastAPI(title=settings.APP_NAME)
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 # --- Rate limiting (optional) ---
@@ -64,8 +74,11 @@ def health():
 
 # --- Startup ---
 @app.on_event("startup")
-def _startup():
-    init_db()
+async def on_startup():
+    # ... existing init
+    if settings.REDIS_URL:
+        r = redis.from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
+        await FastAPILimiter.init(r)
 
 
 # --- Routers ---
@@ -76,3 +89,10 @@ app.include_router(referral.router, prefix="/api/referrals", tags=["referrals"])
 app.include_router(outcome.router, prefix="/api/outcomes", tags=["outcomes"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(audit.router, prefix="/api/audit", tags=["audit"])
+app.include_router(predict.router, prefix="/api/predict", tags=["predict"])
+app.include_router(monitor.router, prefix="/api/monitor", tags=["monitoring"])
+app.include_router(validation.router, prefix="/api/validation", tags=["validation"])
+app.include_router(retina.router, prefix="/api/retina", tags=["retina"])
+app.include_router(fusion.router, prefix="/api/fusion", tags=["fusion"])
+app.include_router(thresholds.router, prefix="/api/thresholds", tags=["thresholds"])
+app.include_router(skin.router, prefix="/api/skin", tags=["skin"])

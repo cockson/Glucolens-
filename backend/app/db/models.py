@@ -4,7 +4,7 @@ import hashlib
 import json
 
 from sqlalchemy import (
-    Column, String, Integer, DateTime, Boolean, ForeignKey, Enum, Text
+    Column, String, Integer, DateTime, Boolean, ForeignKey, Enum, Text, Float
 )
 from sqlalchemy.orm import relationship
 from app.db.base import Base
@@ -148,3 +148,110 @@ class Outcome(Base):
     outcome_label = Column(String, nullable=False)  # confirmed_t2d / not_t2d etc.
     notes = Column(Text, nullable=True)
     recorded_at = Column(DateTime, default=dt.datetime.utcnow)
+    linked_prediction_id = Column(String, nullable=True)
+
+
+class PredictionRecord(Base):
+    __tablename__ = "prediction_records"
+    id = Column(String, primary_key=True)
+    created_at = Column(DateTime, default=dt.datetime.utcnow)
+
+    actor_user_id = Column(String, nullable=True)
+    org_id = Column(String, nullable=True)
+    facility_id = Column(String, nullable=True)
+
+    country_code = Column(String, nullable=True)
+
+    modality = Column(String, nullable=False, default="tabular")  # tabular later retina/skin
+    model_name = Column(String, nullable=False)
+    model_version = Column(String, nullable=False)
+
+    # Consent capture (versioned, per country)
+    consent_version = Column(String, nullable=True)
+    consent_json = Column(Text, nullable=True)
+
+    # Input/Output storage (for monitoring; keep PHI out)
+    input_json = Column(Text, nullable=False)
+    output_json = Column(Text, nullable=False)
+
+    # For calibration & monitoring
+    predicted_label = Column(String, nullable=False)
+    proba_json = Column(Text, nullable=False)  # probabilities per class
+
+
+class DriftSnapshot(Base):
+    __tablename__ = "drift_snapshots"
+    id = Column(String, primary_key=True)
+    created_at = Column(DateTime, default=dt.datetime.utcnow)
+
+    org_id = Column(String, nullable=True)
+    facility_id = Column(String, nullable=True)
+    country_code = Column(String, nullable=True)
+
+    modality = Column(String, nullable=False, default="tabular")
+    model_name = Column(String, nullable=False)
+    model_version = Column(String, nullable=False)
+
+    window = Column(String, nullable=False)  # e.g. "last_7d", "last_30d"
+    baseline_window = Column(String, nullable=False)  # e.g. "train"
+    metrics_json = Column(Text, nullable=False)  # PSI/KS per feature
+
+class SiteDataset(Base):
+    __tablename__ = "site_datasets"
+    id = Column(String, primary_key=True)
+    created_at = Column(DateTime, default=dt.datetime.utcnow)
+
+    org_id = Column(String, nullable=False)
+    facility_id = Column(String, nullable=True)
+    country_code = Column(String, nullable=True)
+
+    site_name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+
+    # Storage / integrity
+    file_path = Column(Text, nullable=False)
+    sha256 = Column(String, nullable=False)
+    n_rows = Column(Integer, nullable=False, default=0)
+
+    # Schema
+    schema_json = Column(Text, nullable=False)  # columns detected
+
+class ValidationRun(Base):
+    __tablename__ = "validation_runs"
+    id = Column(String, primary_key=True)
+    created_at = Column(DateTime, default=dt.datetime.utcnow)
+
+    org_id = Column(String, nullable=False)
+    dataset_id = Column(String, nullable=False)
+
+    modality = Column(String, nullable=False, default="tabular")
+    model_name = Column(String, nullable=False)
+    model_version = Column(String, nullable=False)
+
+    status = Column(String, nullable=False, default="completed")  # MVP: completed/failed
+    metrics_json = Column(Text, nullable=False)
+    report_pdf_path = Column(Text, nullable=True)
+
+
+class ThresholdPolicy(Base):
+    __tablename__ = "threshold_policies"
+    id = Column(String, primary_key=True)
+    created_at = Column(DateTime, default=dt.datetime.utcnow)
+
+    org_id = Column(String, nullable=False)
+    facility_id = Column(String, nullable=True)
+    country_code = Column(String, nullable=True)
+
+    modality = Column(String, nullable=False, default="fusion")
+    model_name = Column(String, nullable=False)
+    model_version = Column(String, nullable=False)
+
+    method = Column(String, nullable=False, default="dca_net_benefit_max")
+    threshold = Column(Float, nullable=False)
+
+    # governance
+    status = Column(String, nullable=False, default="proposed")  # proposed/approved/retired
+    approved_by_user_id = Column(String, nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+
+    evidence_json = Column(Text, nullable=False)  # store summary of net benefit curve + dataset stats
