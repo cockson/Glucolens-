@@ -113,3 +113,13 @@ def load_model_card():
     art = _find_art_dir()
     with open(os.path.join(art,"modelcard.json"),"r",encoding="utf-8") as f:
         return json.load(f)
+
+def load_performance():
+    art = _find_art_dir()
+    perf_path = os.path.join(art, "performance.json")
+    if os.path.isfile(perf_path):
+        with open(perf_path, "r", encoding="utf-8") as f:
+            return {"performance": json.load(f)}
+    # Backward-compatible fallback to model card metrics.
+    card = load_model_card()
+    return {"performance": card.get("metrics_val")}

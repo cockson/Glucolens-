@@ -8,7 +8,7 @@ from app.db.models import User, PredictionRecord
 from app.api.deps import get_current_user
 from app.api.deps_billing import require_active_subscription
 
-from app.ml.skin.serve import predict_skin, load_model_card
+from app.ml.skin.serve import predict_skin, load_model_card, load_performance
 from app.ml.skin.report import render_skin_report_pdf
 
 router = APIRouter()
@@ -17,6 +17,10 @@ def _uuid(): return str(uuid.uuid4())
 @router.get("/model-card")
 def skin_model_card(user: User = Depends(get_current_user)):
     return load_model_card()
+
+@router.get("/performance")
+def skin_performance(user: User = Depends(get_current_user)):
+    return load_performance()
 
 @router.post("/predict")
 def skin_predict(

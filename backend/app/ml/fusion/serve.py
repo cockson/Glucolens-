@@ -29,6 +29,34 @@ def get_fusion_bundle():
         _cached["bundle"] = load(model_path)
     return _cached["bundle"]
 
+def load_model_card():
+    """
+    Fusion currently stores registry/performance and bundled metadata.
+    Build a model-card-like response from these artifacts.
+    """
+    reg = _load_registry()
+    bundle = get_fusion_bundle()
+    perf = load_performance().get("performance", {})
+    return {
+        "model_name": bundle.get("model_name", reg.get("model_name", "fusion")),
+        "model_version": bundle.get("model_version", reg.get("model_version", "unknown")),
+        "classes": bundle.get("classes", ["screen_negative", "screen_positive_refer"]),
+        "features": bundle.get("features", []),
+        "calibration": bundle.get("calibration", perf.get("calibration", "unknown")),
+        "metrics_summary": perf.get("metrics_summary"),
+        "metrics_holdout": perf.get("metrics_holdout"),
+        "metrics_train": perf.get("metrics_train"),
+        "n_samples": perf.get("n_samples"),
+        "intended_use": "Fusion screening support (tabular + optional image/genomics modalities).",
+    }
+
+def load_performance():
+    perf_path = os.path.join(FUSION_DIR, "performance.json")
+    if not os.path.isfile(perf_path):
+        return {"performance": None}
+    with open(perf_path, "r", encoding="utf-8") as f:
+        return {"performance": json.load(f)}
+
 def fusion_predict(
     p_tabular: float | None,
     p_retina: float | None,

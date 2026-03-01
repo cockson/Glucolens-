@@ -22,7 +22,6 @@ ALIASES = {
     "sex": ["sex", "gender"],
     "bmi": ["bmi", "body_mass_index"],
     "waist_circumference": ["waist", "waist_circumference", "waist_cm", "waist_circumference_cm", "waist_circ"],
-    "hip_circumference": ["hip", "hip_circumference", "hip_cm", "hip_circumference_cm", "hip_circ"],
     "systolic_bp": ["sbp", "systolic_bp", "systolic", "systolicbloodpressure", "systolic_bp_mmhg"],
     "diastolic_bp": ["dbp", "diastolic_bp", "diastolic", "diastolicbloodpressure", "diastolic_bp_mmhg"],
     "bmi_category": ["bmi_category"],
@@ -112,11 +111,12 @@ def map_to_canonical(df: pd.DataFrame) -> pd.DataFrame:
 
     # ---- Numeric coercion ----
     for c in [
-        "age", "bmi", "waist_circumference", "hip_circumference", "systolic_bp", "diastolic_bp",
+        "age", "bmi", "waist_circumference", "systolic_bp", "diastolic_bp",
         "fasting_glucose_mgdl", "hba1c_pct", "total_cholesterol_mgdl", "hdl_mgdl",
         "ldl_mgdl", "triglycerides_mgdl", "cvd_risk_10yr_pct"
     ]:
-        out[c] = pd.to_numeric(out[c], errors="coerce")
+        if c in out.columns:
+            out[c] = pd.to_numeric(out[c], errors="coerce")
 
     # ---- Clean unrealistic values (soft rules) ----
     out.loc[(out["age"] < 0) | (out["age"] > 120), "age"] = np.nan

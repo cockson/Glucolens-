@@ -4,6 +4,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 import os 
 import pandas as pd
+import math
 from app.db.session import get_db
 from app.db.models import User, PredictionRecord
 from app.api.deps import get_current_user
@@ -16,6 +17,17 @@ router = APIRouter()
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 def _uuid(): return str(uuid.uuid4())
+
+def _sanitize_json(value):
+    if isinstance(value, dict):
+        return {k: _sanitize_json(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_json(v) for v in value]
+    if isinstance(value, float):
+        if math.isnan(value) or math.isinf(value):
+            return None
+        return float(value)
+    return value
 
 @router.get("/model-card")
 def retina_model_card(user: User = Depends(get_current_user)):
@@ -92,8 +104,8 @@ def retina_performance(user: User = Depends(get_current_user)):
     if not path:
         raise HTTPException(status_code=404, detail="Retina performance.json not found. Run evaluate_retina_pro.")
     with open(path, "r", encoding="utf-8") as f:
-        perf = json.load(f)
+        perf = _sanitize_json(json.load(f))
     comp_rows = []
     if comp:
-        comp_rows = pd.read_csv(comp).to_dict(orient="records")
+        comp_rows = _sanitize_json(pd.read_csv(comp).to_dict(orient="records"))
     return {"performance": perf, "comparison": comp_rows}

@@ -13,7 +13,7 @@ from app.ml.tabular.serve import predict_with_explain
 from app.ml.retina.serve import predict_retina
 from app.ml.skin.serve import predict_skin
 from app.ml.genomics.serve import predict_genomics
-from app.ml.fusion.serve import fusion_predict
+from app.ml.fusion.serve import fusion_predict, load_model_card as load_fusion_model_card, load_performance as load_fusion_performance
 from app.core.thresholds import DEFAULT_FUSION_THRESHOLD, COUNTRY_THRESHOLDS
 from fastapi.responses import StreamingResponse
 from app.ml.fusion.report import render_fusion_report_pdf
@@ -23,6 +23,14 @@ from app.db.models import ThresholdPolicy
 router = APIRouter()
 
 def _uuid(): return str(uuid.uuid4())
+
+@router.get("/model-card")
+def fusion_model_card(user: User = Depends(get_current_user)):
+    return load_fusion_model_card()
+
+@router.get("/performance")
+def fusion_performance(user: User = Depends(get_current_user)):
+    return load_fusion_performance()
 
 @router.post("/predict")
 def fusion_predict_endpoint(

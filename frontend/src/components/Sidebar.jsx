@@ -33,7 +33,9 @@ const NAV = [
     title: "Models",
     items: [
       { to: "/models/tabular", label: "Tabular Model Card" },
+      { to: "/models/fusion", label: "Fusion Model Card" },
       { to: "/models/retina", label: "Retina Model Card" },
+      { to: "/models/skin", label: "Skin Model Card" },
       { to: "/models/genomics", label: "Genomics Model Card" },
       { to: "/quick-check", label: "Public Quick-Check" },
     ],
@@ -44,7 +46,7 @@ export default function Sidebar(){
   const nav = useNavigate();
   const loc = useLocation();
   const auth = getAuth();
-  const [hidden, setHidden] = useState(true);
+  const [hidden, setHidden] = useState(false);
 
   if (!auth?.access_token) return null;
   if (loc.pathname === "/login" || loc.pathname.startsWith("/register")) return null;
@@ -74,9 +76,7 @@ export default function Sidebar(){
             <div className="sidebar-subtitle">Clinical ML Console</div>
           </div>
         )}
-        <button className="collapse-btn" onClick={()=>setHidden(true)} aria-label="Hide sidebar">
-          ×
-        </button>
+        <button className="collapse-btn" onClick={()=>setHidden(true)} aria-label="Hide sidebar">x</button>
       </div>
 
       <div className="sidebar-quick">
@@ -111,3 +111,4 @@ export default function Sidebar(){
     </>
   );
 }
+

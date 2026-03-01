@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import CleanDataView from "../components/CleanDataView.jsx";
 
 export default function RetinaInsights(){
   const [card,setCard]=useState(null);
@@ -21,14 +22,14 @@ export default function RetinaInsights(){
         {card && (
           <div className="card">
             <h3 style={{marginTop:0}}>Model Card</h3>
-            <pre className="small" style={{whiteSpace:"pre-wrap"}}>{JSON.stringify(card,null,2)}</pre>
+            <CleanDataView data={card} />
           </div>
         )}
 
         {perf && (
           <div className="card" style={{marginTop:12}}>
             <h3 style={{marginTop:0}}>Performance</h3>
-            <pre className="small" style={{whiteSpace:"pre-wrap"}}>{JSON.stringify(perfSummary,null,2)}</pre>
+            <CleanDataView data={perfSummary} />
           </div>
         )}
       </div>

@@ -63,11 +63,8 @@ COL_ALIASES = {
     "gender": "sex",
     "age_years": "age",
     "waist_circumference_cm": "waist_circumference",
-    "hip_circumference_cm": "hip_circumference",
     "waist": "waist_circumference",
     "waist_circ": "waist_circumference",
-    "hip": "hip_circumference",
-    "hip_circ": "hip_circumference",
     "systolic": "systolic_bp",
     "systolic_bp_mmhg": "systolic_bp",
     "sbp": "systolic_bp",
@@ -109,11 +106,7 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    if "whr" not in df.columns and {"waist_circumference", "hip_circumference"}.issubset(df.columns):
-        hip = pd.to_numeric(df["hip_circumference"], errors="coerce")
-        waist = pd.to_numeric(df["waist_circumference"], errors="coerce")
-        denom = hip.replace(0, np.nan)
-        df["whr"] = waist / denom
+    # Keep WHR only if already present (or aliased from source columns like waist_hip_ratio).
     if "pulse_pressure" not in df.columns and {"systolic_bp", "diastolic_bp"}.issubset(df.columns):
         sbp = pd.to_numeric(df["systolic_bp"], errors="coerce")
         dbp = pd.to_numeric(df["diastolic_bp"], errors="coerce")

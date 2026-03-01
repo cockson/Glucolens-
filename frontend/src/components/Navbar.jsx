@@ -25,6 +25,9 @@ export default function Navbar(){
         <div className="topbar-links">
           <Link to="/dashboard">Dashboard</Link>
           <Link to="/screening/tabular">Screening</Link>
+          <Link to="/models/tabular">Tabular Card</Link>
+          <Link to="/models/fusion">Fusion Card</Link>
+          <Link to="/models/skin">Skin Card</Link>
           <Link to="/referrals">Referrals</Link>
           <Link to="/outcomes">Outcomes</Link>
           <Link to="/monitoring">Monitoring</Link>

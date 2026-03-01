@@ -11,10 +11,14 @@ ANTHRO_FEATURES = [
     "sex",        # e.g., "M"/"F" or 0/1
     "bmi",
     "waist_circumference",
-    "hip_circumference",
-    "whr",        # waist-hip ratio (optional)
     "systolic_bp",
     "diastolic_bp",
+    "bmi_category",
+    "family_history_diabetes",
+    "fasting_glucose_mgdl",
+    "hba1c_pct",
+    "physical_activity",
+    "smoking_status",
 ]
 
 # Put genomics features you actually have (example placeholders):

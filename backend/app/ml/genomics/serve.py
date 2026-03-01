@@ -11,6 +11,17 @@ ART_CANDIDATES = [
     os.path.join(PROJECT_ROOT, "backend", "artifacts", "genomics"),
 ]
 
+def _sanitize_json(value):
+    if isinstance(value, dict):
+        return {k: _sanitize_json(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_json(v) for v in value]
+    if isinstance(value, float):
+        if pd.isna(value) or value in (float("inf"), float("-inf")):
+            return None
+        return float(value)
+    return value
+
 
 def _find_art_dir() -> str:
     for d in ART_CANDIDATES:
@@ -70,10 +81,16 @@ def load_model_card():
 def load_performance():
     art = _find_art_dir()
     perf_path = os.path.join(art, "performance.json")
-    if not os.path.isfile(perf_path):
-        return {"performance": None}
-    with open(perf_path, "r", encoding="utf-8") as f:
-        return {"performance": json.load(f)}
+    if os.path.isfile(perf_path):
+        with open(perf_path, "r", encoding="utf-8") as f:
+            return {"performance": _sanitize_json(json.load(f))}
+
+    # Fallback: expose performance-like metrics from model card when dedicated file is absent.
+    card = load_model_card()
+    metrics = card.get("performance") or card.get("metrics") or card.get("metrics_val")
+    if metrics is not None:
+        return {"performance": _sanitize_json(metrics), "source": "model_card_fallback"}
+    return {"performance": {}}
 
 def predict_genomics(payload: dict):
     bundle = get_model()

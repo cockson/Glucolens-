@@ -23,8 +23,10 @@ import ExternalValidation from "./ExternalValidation.jsx";
 import RetinaScreening from "./RetinaScreening.jsx";
 import RetinaInsights from "./RetinaInsights.jsx";
 import FusionScreening from "./FusionScreening.jsx";
+import FusionInsights from "./FusionInsights.jsx";
 import ThresholdGovernance from "./ThresholdGovernance.jsx";
 import SkinScreening from "./SkinScreening.jsx";
+import SkinInsights from "./SkinInsights.jsx";
 import GenomicsScreening from "./GenomicsScreening.jsx";
 import GenomicsInsights from "./GenomicsInsights.jsx";
 
@@ -69,6 +71,8 @@ export default function App() {
             <Route path="/validation" element={<Protected><ExternalValidation /></Protected>} />
             <Route path="/screening/retina" element={<Protected><RetinaScreening /></Protected>} />
             <Route path="/models/retina" element={<Protected><RetinaInsights /></Protected>} />
+            <Route path="/models/skin" element={<Protected><SkinInsights /></Protected>} />
+            <Route path="/models/fusion" element={<Protected><FusionInsights /></Protected>} />
             <Route path="/screening/fusion" element={<Protected><FusionScreening /></Protected>} />
             <Route path="/governance/thresholds" element={<Protected><ThresholdGovernance /></Protected>} />
             <Route path="/screening/skin" element={<Protected><SkinScreening /></Protected>} />

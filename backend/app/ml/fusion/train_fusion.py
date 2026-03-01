@@ -4,7 +4,7 @@ import pandas as pd
 from joblib import dump
 from pandas.errors import EmptyDataError
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_predict
 from sklearn.linear_model import LogisticRegression
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import roc_auc_score, brier_score_loss, accuracy_score, f1_score
@@ -22,6 +22,38 @@ def _metric_pack(y_true, p):
         "accuracy": float(accuracy_score(y_true, y_hat)),
         "f1": float(f1_score(y_true, y_hat, zero_division=0)),
     }
+
+def _build_features(df: pd.DataFrame):
+    # Gate modality probabilities by quality flags.
+    df = df.copy()
+    df["p_retina_eff"] = df["p_retina"] * df["retina_ok"]
+    df["p_skin_eff"] = df["p_skin"] * df["skin_ok"]
+    df["p_genomics_eff"] = df["p_genomics"] * df["geno_ok"]
+
+    eff_cols = ["p_tabular", "p_retina_eff", "p_skin_eff", "p_genomics_eff"]
+    arr = df[eff_cols].to_numpy(dtype=float)
+    valid = np.isfinite(arr)
+    counts = valid.sum(axis=1).clip(min=1)
+    arr_zeros = np.where(valid, arr, 0.0)
+    arr_nanmax = np.where(valid, arr, -np.inf)
+    arr_nanmin = np.where(valid, arr, np.inf)
+
+    df["p_mean_active"] = arr_zeros.sum(axis=1) / counts
+    df["p_max_active"] = np.where(np.isfinite(arr_nanmax.max(axis=1)), arr_nanmax.max(axis=1), 0.0)
+    df["p_min_active"] = np.where(np.isfinite(arr_nanmin.min(axis=1)), arr_nanmin.min(axis=1), 0.0)
+    df["p_range_active"] = df["p_max_active"] - df["p_min_active"]
+    df["n_modalities_active"] = counts
+    df["tab_retina_gap"] = np.abs(df["p_tabular"] - df["p_retina_eff"])
+    df["tab_skin_gap"] = np.abs(df["p_tabular"] - df["p_skin_eff"])
+
+    feature_cols = [
+        "p_tabular", "p_retina_eff", "p_skin_eff", "p_genomics_eff",
+        "retina_ok", "skin_ok", "geno_ok",
+        "p_mean_active", "p_max_active", "p_min_active", "p_range_active",
+        "n_modalities_active", "tab_retina_gap", "tab_skin_gap",
+    ]
+    X = df[feature_cols].to_numpy(dtype=float)
+    return X, feature_cols
 
 def main():
     """
@@ -60,8 +92,12 @@ def main():
     df["p_genomics"] = df["p_genomics"].fillna(0.0)
     df["geno_ok"] = df["geno_ok"].fillna(0).astype(int)
 
-    feature_cols = ["p_tabular","p_retina","retina_ok","p_skin","skin_ok","p_genomics","geno_ok"]
-    X = df[feature_cols].values
+    # Clean + deduplicate.
+    df = df.drop_duplicates().reset_index(drop=True)
+    for c in ["p_tabular", "p_retina", "p_skin", "p_genomics"]:
+        df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0).clip(0.0, 1.0)
+
+    X, feature_cols = _build_features(df)
     y = df["label"].astype(int).values
 
     uniq, counts = np.unique(y, return_counts=True)
@@ -70,6 +106,12 @@ def main():
 
     min_class_n = int(counts.min())
     n_samples = int(len(y))
+    if n_samples < 200 or min_class_n < 30:
+        print(
+            f"WARNING: Very small fusion training set for a Brier target near 0.02 "
+            f"(rows={n_samples}, min_class_count={min_class_n}). "
+            "Collect more linked outcomes for reliable calibration."
+        )
     if n_samples < 20 or min_class_n < 3:
         raise SystemExit(
             f"fusion_train.csv too small for reliable calibration (rows={n_samples}, min_class_count={min_class_n}). "
@@ -90,21 +132,29 @@ def main():
         candidates = []
         if calib_cv_train >= 2:
             candidates = ["sigmoid"]
-            if len(y_train) >= 100 and min_class_train >= 5:
+            if len(y_train) >= 120 and min_class_train >= 8:
                 candidates.append("isotonic")
 
         best = None
-        for method in candidates:
-            est = CalibratedClassifierCV(
-                LogisticRegression(max_iter=2000, class_weight="balanced"),
-                method=method,
-                cv=calib_cv_train,
-            )
-            est.fit(X_train, y_train)
-            p_test = est.predict_proba(X_test)[:,1]
-            m = _metric_pack(y_test, p_test)
-            if best is None or m["brier"] < best["metrics"]["brier"]:
-                best = {"method": method, "metrics": m}
+        for c_val in [0.1, 0.5, 1.0, 2.0, 5.0]:
+            for cw in ["balanced", None]:
+                base = LogisticRegression(max_iter=3000, C=c_val, class_weight=cw)
+                # Evaluate via OOF brier on train split to pick robust base.
+                cv_inner = StratifiedKFold(n_splits=min(5, min_class_train), shuffle=True, random_state=42)
+                p_oof = cross_val_predict(base, X_train, y_train, cv=cv_inner, method="predict_proba")[:, 1]
+                b_oof = brier_score_loss(y_train, p_oof)
+                for method in candidates:
+                    est = CalibratedClassifierCV(base, method=method, cv=calib_cv_train)
+                    est.fit(X_train, y_train)
+                    p_test = est.predict_proba(X_test)[:,1]
+                    m = _metric_pack(y_test, p_test)
+                    if best is None or m["brier"] < best["metrics"]["brier"]:
+                        best = {
+                            "method": method,
+                            "metrics": m,
+                            "base_params": {"C": c_val, "class_weight": cw},
+                            "oof_brier_train": float(b_oof),
+                        }
 
         if best is not None:
             selected_method = best["method"]
@@ -112,16 +162,20 @@ def main():
 
     # Fall back to direct logistic model when calibration CV is not feasible.
     final_cv = min(5, n_samples, min_class_n)
+    base_params = {"C": 1.0, "class_weight": "balanced"}
+    if holdout_ok and "best" in locals() and best is not None:
+        base_params = best.get("base_params", base_params)
+    base_final = LogisticRegression(max_iter=3000, C=base_params["C"], class_weight=base_params["class_weight"])
     if selected_method is not None and final_cv >= 2:
         estimator = CalibratedClassifierCV(
-            LogisticRegression(max_iter=2000, class_weight="balanced"),
+            base_final,
             method=selected_method,
             cv=final_cv,
         )
         estimator.fit(X, y)
         calibration_used = selected_method
     else:
-        estimator = LogisticRegression(max_iter=2000, class_weight="balanced")
+        estimator = base_final
         estimator.fit(X, y)
         calibration_used = "none"
         # Tiny-data fallback: holdout metrics unavailable.
@@ -143,13 +197,14 @@ def main():
         "features": feature_cols,
         "classes": ["screen_negative","screen_positive_refer"],
         "calibration": calibration_used,
+        "base_model_params": base_params,
         "metrics_oof": metrics_summary,
         "metrics_holdout": metrics_holdout,
         "metrics_train": metrics_train,
         "estimator": estimator
     }
 
-    dump(bundle, os.path.join(ART_DIR, f"{model_name}_{version}.joblib"))
+    dump(bundle, os.path.join(ART_DIR, f"{model_name}_{version}.joblib"), compress=3)
 
     with open(os.path.join(ART_DIR,"performance.json"),"w",encoding="utf-8") as f:
         json.dump({

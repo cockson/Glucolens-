@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import Locked from "./Locked.jsx";
 import { isLockedError, lockedMessage } from "../lib/errors";
+import CleanDataView from "../components/CleanDataView.jsx";
 
 export default function Monitoring(){
   const [outcomes,setOutcomes]=useState(null);
@@ -60,12 +61,12 @@ export default function Monitoring(){
         <div className="row" style={{ alignItems:"start" }}>
           <div className="card">
             <h3 style={{ marginTop:0 }}>Outcome Monitoring (last 30 days)</h3>
-            <pre className="small" style={{ whiteSpace:"pre-wrap" }}>{JSON.stringify(outcomes, null, 2)}</pre>
+            <CleanDataView data={outcomes} />
           </div>
 
           <div className="card">
             <h3 style={{ marginTop:0 }}>Simulation</h3>
-            <pre className="small" style={{ whiteSpace:"pre-wrap" }}>{JSON.stringify(sim, null, 2)}</pre>
+            <CleanDataView data={sim} />
           </div>
         </div>
 
@@ -74,9 +75,9 @@ export default function Monitoring(){
             <h3 style={{ margin:0 }}>Drift Monitoring</h3>
             <button className="btn secondary" onClick={computeDrift}>Compute drift snapshot</button>
           </div>
-          <pre className="small" style={{ whiteSpace:"pre-wrap", marginTop: 10 }}>
-{JSON.stringify(drift, null, 2)}
-          </pre>
+          <div style={{ marginTop: 10 }}>
+            <CleanDataView data={drift} />
+          </div>
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import CleanDataView from "../components/CleanDataView.jsx";
 
 export default function GenomicsInsights(){
   const [card, setCard] = useState(null);
@@ -20,14 +21,18 @@ export default function GenomicsInsights(){
         {card && (
           <div className="card">
             <h3 style={{ marginTop:0 }}>Model Card</h3>
-            <pre className="small" style={{ whiteSpace:"pre-wrap" }}>{JSON.stringify(card, null, 2)}</pre>
+            <CleanDataView data={card} />
           </div>
         )}
 
         {perf && (
           <div className="card" style={{ marginTop:12 }}>
             <h3 style={{ marginTop:0 }}>Performance</h3>
-            <pre className="small" style={{ whiteSpace:"pre-wrap" }}>{JSON.stringify(perf.performance || perf, null, 2)}</pre>
+            {perf.performance == null ? (
+              <p className="small">Performance not available yet. Train genomics model first to generate artifacts.</p>
+            ) : (
+              <CleanDataView data={perf.performance || perf} />
+            )}
           </div>
         )}
       </div>

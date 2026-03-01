@@ -107,7 +107,10 @@ export default function Dashboard(){
           <p className="small">Model cards and supporting tools.</p>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <Link className="btn secondary" to="/models/tabular">Tabular Model Card</Link>
+            <Link className="btn secondary" to="/models/fusion">Fusion Model Card</Link>
             <Link className="btn secondary" to="/models/retina">Retina Model Card</Link>
+            <Link className="btn secondary" to="/models/skin">Skin Model Card</Link>
+            <Link className="btn secondary" to="/models/genomics">Genomics Model Card</Link>
             <Link className="btn secondary" to="/quick-check">Public Quick-Check</Link>
             <Link className="btn secondary" to="/facilities">Facility Finder</Link>
           </div>

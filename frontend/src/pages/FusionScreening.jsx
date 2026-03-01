@@ -33,7 +33,20 @@ export default function FusionScreening(){
 
   const [country, setCountry] = useState("NG");
   const [patientKey, setPatientKey] = useState("");
-  const [form, setForm] = useState({ age:"", sex:"", bmi:"", waist_circumference:"", hip_circumference:"", systolic_bp:"", diastolic_bp:"" });
+  const [form, setForm] = useState({
+    age: "",
+    sex: "",
+    bmi: "",
+    bmi_category: "",
+    waist_circumference: "",
+    systolic_bp: "",
+    diastolic_bp: "",
+    fasting_glucose_mgdl: "",
+    hba1c_pct: "",
+    family_history_diabetes: "",
+    physical_activity: "",
+    smoking_status: "",
+  });
   const [result, setResult] = useState(null);
   const [predId, setPredId] = useState(null);
   const [err, setErr] = useState("");
@@ -149,9 +162,10 @@ export default function FusionScreening(){
       checkRange("Age", form.age, 0, 120),
       checkRange("BMI", form.bmi, 10, 80),
       checkRange("Waist circumference", form.waist_circumference, 40, 220),
-      checkRange("Hip circumference", form.hip_circumference, 40, 240),
       checkRange("Systolic BP", form.systolic_bp, 70, 260),
       checkRange("Diastolic BP", form.diastolic_bp, 40, 160),
+      checkRange("Fasting glucose", form.fasting_glucose_mgdl, 40, 500),
+      checkRange("HbA1c", form.hba1c_pct, 3, 20),
     ].filter(Boolean);
     if (tabularChecks.length) {
       setErr(tabularChecks[0]);
@@ -295,29 +309,76 @@ export default function FusionScreening(){
               <div className="small">Expected range: 10-80 kg/m2²</div>
             </div>
             <div>
-              <label className="small">Waist</label>
-              <input className="input" type="number" min="40" max="220" step="0.1" inputMode="decimal" value={form.waist_circumference} onChange={e=>set("waist_circumference",e.target.value)} placeholder="98 (40-220)" />
-              <div className="small">Expected range: 40-220 cm</div>
+              <label className="small">BMI category</label>
+              <select className="input" value={form.bmi_category} onChange={e=>set("bmi_category",e.target.value)}>
+                <option value="">Unknown</option>
+                <option value="underweight">Underweight</option>
+                <option value="normal">Normal</option>
+                <option value="overweight">Overweight</option>
+                <option value="obese">Obese</option>
+              </select>
             </div>
           </div>
 
           <div className="row" style={{marginTop:10}}>
             <div>
-              <label className="small">Hip</label>
-              <input className="input" type="number" min="40" max="240" step="0.1" inputMode="decimal" value={form.hip_circumference} onChange={e=>set("hip_circumference",e.target.value)} placeholder="105 (40-240)" />
-              <div className="small">Expected range: 40-240 cm</div>
+              <label className="small">Waist</label>
+              <input className="input" type="number" min="40" max="220" step="0.1" inputMode="decimal" value={form.waist_circumference} onChange={e=>set("waist_circumference",e.target.value)} placeholder="98 (40-220)" />
+              <div className="small">Expected range: 40-220 cm</div>
             </div>
+            <div>
+              <label className="small">Family history of diabetes</label>
+              <select className="input" value={form.family_history_diabetes} onChange={e=>set("family_history_diabetes",e.target.value)}>
+                <option value="">Unknown</option>
+                <option value="1">Yes</option>
+                <option value="0">No</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="row" style={{marginTop:10}}>
             <div>
               <label className="small">SBP</label>
               <input className="input" type="number" min="70" max="260" step="1" inputMode="numeric" value={form.systolic_bp} onChange={e=>set("systolic_bp",e.target.value)} placeholder="145 (70-260)" />
               <div className="small">Expected range: 70-260 mmHg</div>
             </div>
+            <div>
+              <label className="small">DBP</label>
+              <input className="input" type="number" min="40" max="160" step="1" inputMode="numeric" value={form.diastolic_bp} onChange={e=>set("diastolic_bp",e.target.value)} placeholder="90 (40-160)" />
+              <div className="small">Expected range: 40-160 mmHg</div>
+            </div>
           </div>
 
-          <div style={{marginTop:10}}>
-            <label className="small">DBP</label>
-            <input className="input" type="number" min="40" max="160" step="1" inputMode="numeric" value={form.diastolic_bp} onChange={e=>set("diastolic_bp",e.target.value)} placeholder="90 (40-160)" />
-            <div className="small">Expected range: 40-160 mmHg</div>
+          <div className="row" style={{marginTop:10}}>
+            <div>
+              <label className="small">Fasting glucose (mg/dL)</label>
+              <input className="input" type="number" min="40" max="500" step="0.1" inputMode="decimal" value={form.fasting_glucose_mgdl} onChange={e=>set("fasting_glucose_mgdl",e.target.value)} placeholder="110 (40-500)" />
+            </div>
+            <div>
+              <label className="small">HbA1c (%)</label>
+              <input className="input" type="number" min="3" max="20" step="0.1" inputMode="decimal" value={form.hba1c_pct} onChange={e=>set("hba1c_pct",e.target.value)} placeholder="6.2 (3-20)" />
+            </div>
+          </div>
+
+          <div className="row" style={{marginTop:10}}>
+            <div>
+              <label className="small">Physical activity</label>
+              <select className="input" value={form.physical_activity} onChange={e=>set("physical_activity",e.target.value)}>
+                <option value="">Unknown</option>
+                <option value="inactive">Inactive</option>
+                <option value="moderate">Moderate</option>
+                <option value="active">Active</option>
+              </select>
+            </div>
+            <div>
+              <label className="small">Smoking status</label>
+              <select className="input" value={form.smoking_status} onChange={e=>set("smoking_status",e.target.value)}>
+                <option value="">Unknown</option>
+                <option value="never">Never</option>
+                <option value="former">Former</option>
+                <option value="current">Current</option>
+              </select>
+            </div>
           </div>
         </div>
 

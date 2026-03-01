@@ -24,6 +24,17 @@ def _first_existing(paths: list[str]) -> str | None:
             return p
     return None
 
+def _sanitize_json(value):
+    if isinstance(value, dict):
+        return {k: _sanitize_json(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_json(v) for v in value]
+    if isinstance(value, float):
+        if np.isnan(value) or np.isinf(value):
+            return None
+        return float(value)
+    return value
+
 def load_registry():
     reg_path = _first_existing([REGISTRY, os.path.join(ALT_ART_DIR, "registry.json")])
     if not reg_path:
@@ -151,7 +162,7 @@ def load_model_card():
                 break
     if not path:
         raise FileNotFoundError("Tabular model card not found")
-    return _read_json(path)
+    return _sanitize_json(_read_json(path))
 
 def load_performance():
     reg = load_registry()
@@ -162,7 +173,7 @@ def load_performance():
     ])
     if not perf_path:
         raise FileNotFoundError("Tabular performance.json not found")
-    perf = _read_json(perf_path)
+    perf = _sanitize_json(_read_json(perf_path))
 
     comp_csv_path = _first_existing([
         _resolve_model_path(reg.get("comparison_csv", "")),
@@ -171,5 +182,8 @@ def load_performance():
     ])
     comp = []
     if comp_csv_path:
-        comp = pd.read_csv(comp_csv_path).to_dict(orient="records")
+        try:
+            comp = _sanitize_json(pd.read_csv(comp_csv_path).to_dict(orient="records"))
+        except Exception:
+            comp = []
     return perf, comp
