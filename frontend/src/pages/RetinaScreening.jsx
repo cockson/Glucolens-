@@ -4,6 +4,9 @@ import { getAuth } from "../lib/authStore";
 import Locked from "./Locked.jsx";
 import { isLockedError, lockedMessage } from "../lib/errors";
 
+const PATIENT_KEY_RE = /^[A-Za-z0-9_-]{3,64}$/;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+
 export default function RetinaScreening(){
   const auth = getAuth();
   const isPublic = auth?.role === "public";
@@ -23,7 +26,10 @@ export default function RetinaScreening(){
   async function run(){
     setErr(""); setResult(null); setPredId(null);
     if (!isPublic && patientKey.trim().length === 0) { setErr("Patient key is required for clinical tracking."); return; }
+    if (!isPublic && !PATIENT_KEY_RE.test(patientKey.trim())) { setErr("Patient key must be 3-64 chars (letters, numbers, underscore, hyphen)."); return; }
     if(!file){ setErr("Choose an image."); return; }
+    if (!String(file.type || "").startsWith("image/")) { setErr("Selected file must be an image."); return; }
+    if (file.size > MAX_IMAGE_BYTES) { setErr("Image is too large (max 10MB)."); return; }
     setBusy(true);
     try{
       const fd = new FormData();
@@ -76,7 +82,8 @@ export default function RetinaScreening(){
         {!isPublic && (
           <>
             <label className="small">Patient key</label>
-            <input className="input" value={patientKey} onChange={e=>setPatientKey(e.target.value)} placeholder="PAT_001_ABC" />
+            <input className="input" value={patientKey} maxLength={64} onChange={e=>setPatientKey(e.target.value)} placeholder="PAT_001_ABC" />
+            <div className="small">Expected format: 3-64 chars (A-Z, 0-9, _, -)</div>
             <div style={{height:10}} />
           </>
         )}

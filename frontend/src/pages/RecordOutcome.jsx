@@ -4,6 +4,9 @@ import Locked from "./Locked.jsx";
 import { isLockedError, lockedMessage } from "../lib/errors";
 import { useSearchParams } from "react-router-dom";
 
+const PATIENT_KEY_RE = /^[A-Za-z0-9_-]{3,64}$/;
+const UUID_LIKE_RE = /^[0-9a-fA-F-]{8,64}$/;
+
 export default function RecordOutcome(){
   const [params] = useSearchParams();
   const [patientKey, setPatientKey] = useState("");
@@ -24,9 +27,14 @@ export default function RecordOutcome(){
   async function submit(){
     setErr(""); setOk(false);
     try{
+      const pk = patientKey.trim();
+      const rid = referralId.trim();
+      if (!PATIENT_KEY_RE.test(pk)) throw new Error("Patient key must be 3-64 chars (letters, numbers, underscore, hyphen).");
+      if (rid && !UUID_LIKE_RE.test(rid)) throw new Error("Referral ID format is invalid.");
+      if (notes.length > 2000) throw new Error("Clinical notes must be at most 2000 characters.");
       const payload = {
-        patient_key: patientKey.trim(),
-        referral_id: referralId || null,
+        patient_key: pk,
+        referral_id: rid || null,
         outcome_label: label,
         notes: notes || null,
       };
@@ -51,11 +59,12 @@ export default function RecordOutcome(){
         <div className="row">
           <div>
             <label className="small">Patient Key</label>
-            <input className="input" value={patientKey} onChange={e=>setPatientKey(e.target.value)} placeholder="PAT_001_ABC" />
+            <input className="input" value={patientKey} onChange={e=>setPatientKey(e.target.value)} placeholder="PAT_001_ABC" maxLength={64} />
+            <div className="small">Expected format: 3-64 chars (A-Z, 0-9, _, -)</div>
           </div>
           <div>
             <label className="small">Referral ID (optional)</label>
-            <input className="input" value={referralId} onChange={e=>setReferralId(e.target.value)} placeholder="referral UUID" />
+            <input className="input" value={referralId} onChange={e=>setReferralId(e.target.value)} placeholder="referral UUID" maxLength={64} />
           </div>
         </div>
 
@@ -71,7 +80,8 @@ export default function RecordOutcome(){
 
         <div style={{ height: 10 }} />
         <label className="small">Clinical notes (optional)</label>
-        <textarea className="input" style={{ minHeight: 110 }} value={notes} onChange={e=>setNotes(e.target.value)} />
+        <textarea className="input" style={{ minHeight: 110 }} value={notes} maxLength={2000} onChange={e=>setNotes(e.target.value)} />
+        <div className="small">Max length: 2000 characters</div>
 
         <div style={{ height: 12 }} />
         <button className="btn" onClick={submit}>Save outcome</button>

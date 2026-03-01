@@ -1,0 +1,51 @@
+{
+  "n_rows": 20000,
+  "n_features": 30,
+  "classes": {
+    "non_diabetic": 6857,
+    "prediabetic": 6700,
+    "diabetic": 6443
+  },
+  "label_binary": {
+    "0": 13557,
+    "1": 6443
+  },
+  "missing_pct": {
+    "age": 0.0,
+    "sex": 0.0,
+    "bmi": 0.0,
+    "waist_circumference": 0.0,
+    "systolic_bp": 0.0,
+    "diastolic_bp": 0.0,
+    "pulse_pressure": 0.0,
+    "bmi_category": 0.0,
+    "central_obesity": 0.0,
+    "smoking_status": 0.0,
+    "alcohol_use": 44.19,
+    "physical_activity": 0.0,
+    "family_history_diabetes": 0.0,
+    "family_history_cvd": 0.0,
+    "hypertension_status": 0.0,
+    "fasting_glucose_mgdl": 0.0,
+    "hba1c_pct": 0.0,
+    "total_cholesterol_mgdl": 0.0,
+    "hdl_mgdl": 0.0,
+    "ldl_mgdl": 0.0,
+    "triglycerides_mgdl": 0.0,
+    "cvd_risk_10yr_pct": 0.0,
+    "cvd_risk_category": 0.0,
+    "on_antihypertensive": 0.0,
+    "on_statin": 0.0,
+    "on_antidiabetic": 0.0,
+    "diabetes_status": 0.0,
+    "diabetic_status": 0.0,
+    "label": 0.0,
+    "source_file": 0.0
+  },
+  "input_files": [
+    "ncd_high_ncd_burden.csv",
+    "ncd_low_ncd_burden.csv",
+    "ncd_moderate_ncd_burden.csv"
+  ],
+  "deduplicated_rows_removed": 0
+}

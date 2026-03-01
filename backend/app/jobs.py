@@ -23,7 +23,14 @@ def run_validation_job(run_id: str, dataset_id: str):
         y = df["label"].astype(int).values
 
         model, meta = get_model()
-        p = model.predict_proba(X)[:, 1]
+        p_all = model.predict_proba(X)
+        classes = [str(c) for c in getattr(model, "classes_", list(range(p_all.shape[1])))]
+        if "diabetic" in classes:
+            p = p_all[:, classes.index("diabetic")]
+        elif "t2d" in classes:
+            p = p_all[:, classes.index("t2d")]
+        else:
+            p = p_all[:, min(1, p_all.shape[1]-1)]
         metrics = compute_external_metrics(y, p)
 
         pdf = render_external_validation_pdf(

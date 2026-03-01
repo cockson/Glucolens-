@@ -17,9 +17,13 @@ export default function ThresholdGovernance(){
   async function compute(){
     setErr(""); setBusy(true);
     try{
+      const dayNum = Number(days);
+      if (!Number.isInteger(dayNum) || dayNum < 7 || dayNum > 3650) {
+        throw new Error("Window days must be an integer between 7 and 3650.");
+      }
       const q = new URLSearchParams();
       if(facilityId.trim()) q.set("facility_id", facilityId.trim());
-      q.set("days", String(days));
+      q.set("days", String(dayNum));
       await api.post(`/api/thresholds/compute?${q.toString()}`);
       await refresh();
     }catch(e){
@@ -54,7 +58,8 @@ export default function ThresholdGovernance(){
           <input className="input" value={facilityId} onChange={e=>setFacilityId(e.target.value)} />
           <div style={{height:8}} />
           <label className="small">Window days</label>
-          <input className="input" value={days} onChange={e=>setDays(Number(e.target.value||180))} />
+          <input className="input" type="number" min="7" max="3650" step="1" inputMode="numeric" value={days} onChange={e=>setDays(Number(e.target.value||180))} placeholder="180" />
+          <div className="small">Expected range: 7-3650 days</div>
           <div style={{height:10}} />
           <button className="btn" onClick={compute} disabled={busy}>{busy?"Working…":"Compute threshold"}</button>
         </div>

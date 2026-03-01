@@ -23,4 +23,4 @@ GENO_FEATURES = [
 ]
 
 TARGET_COL = "diabetes_status"  # for training
-CLASSES = ["not_diabetic", "t2d"]  # per your note: current datasets are T2D-labeled; keep binary for now
+CLASSES = ["non_diabetic", "prediabetic", "diabetic"]

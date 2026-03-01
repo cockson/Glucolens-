@@ -10,18 +10,37 @@ from app.ml.skin.model import build_skin_model
 from app.ml.skin.gradcam import GradCAM, overlay_cam_on_image
 from app.ml.skin.quality import pil_to_rgb_uint8, quality_check_rgb_uint8
 
-ART_DIR = os.path.join("backend","artifacts","skin")
-REGISTRY = os.path.join(ART_DIR,"registry.json")
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+PROJECT_ROOT = os.path.abspath(os.path.join(REPO_ROOT, ".."))
+ART_CANDIDATES = [
+    os.path.join(REPO_ROOT, "artifacts", "skin"),
+    os.path.join(PROJECT_ROOT, "backend", "artifacts", "skin"),
+]
 _cached = {"bundle":None,"model":None,"cam":None,"tfm":None}
 
+def _find_art_dir() -> str:
+    for d in ART_CANDIDATES:
+        if os.path.isfile(os.path.join(d, "registry.json")):
+            return d
+    # Return default location for a clearer downstream error if missing.
+    return ART_CANDIDATES[0]
+
+def _resolve_model_path(path: str) -> str:
+    if os.path.isabs(path):
+        return path
+    if path == "backend" or path.startswith(f"backend{os.sep}"):
+        return os.path.join(PROJECT_ROOT, path)
+    return os.path.join(REPO_ROOT, path)
+
 def _load_registry():
-    with open(REGISTRY,"r",encoding="utf-8") as f:
+    art = _find_art_dir()
+    with open(os.path.join(art, "registry.json"),"r",encoding="utf-8") as f:
         return json.load(f)["current"]
 
 def get_bundle():
     if _cached["bundle"] is None:
         reg = _load_registry()
-        _cached["bundle"] = load(reg["model_path"])
+        _cached["bundle"] = load(_resolve_model_path(reg["model_path"]))
     return _cached["bundle"]
 
 def get_model():
@@ -91,5 +110,6 @@ def predict_skin(image_bytes: bytes):
     }
 
 def load_model_card():
-    with open(os.path.join(ART_DIR,"modelcard.json"),"r",encoding="utf-8") as f:
+    art = _find_art_dir()
+    with open(os.path.join(art,"modelcard.json"),"r",encoding="utf-8") as f:
         return json.load(f)

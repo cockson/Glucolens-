@@ -12,11 +12,20 @@ export default function Login() {
   async function submit(e) {
     e.preventDefault();
     setErr("");
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      setErr("Enter a valid email address.");
+      return;
+    }
+    if (!password || password.length < 8) {
+      setErr("Password must be at least 8 characters.");
+      return;
+    }
     // Prevent stale tokens from interfering with a fresh login attempt.
     clearAuth();
     try {
       const res = await api.post("/api/auth/login", {
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         password,
       });
       setAuth(res.data);
@@ -37,9 +46,9 @@ export default function Login() {
         <h2>Login</h2>
         <p className="small">Access hospital/clinic/pharmacy tools (subscription required).</p>
         <form onSubmit={submit}>
-          <input className="input" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
+          <input className="input" type="email" required placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
           <div style={{ height: 10 }} />
-          <input className="input" type="password" placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} />
+          <input className="input" type="password" required minLength={8} placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} />
           <div style={{ height: 14 }} />
           <button className="btn" type="submit">Login</button>
         </form>

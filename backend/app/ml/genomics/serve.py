@@ -7,6 +7,7 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", 
 PROJECT_ROOT = os.path.abspath(os.path.join(REPO_ROOT, ".."))
 ART_CANDIDATES = [
     os.path.join(REPO_ROOT, "artifacts", "genomics"),
+    os.path.join(REPO_ROOT, "backend", "artifacts", "genomics"),
     os.path.join(PROJECT_ROOT, "backend", "artifacts", "genomics"),
 ]
 
@@ -15,7 +16,9 @@ def _find_art_dir() -> str:
     for d in ART_CANDIDATES:
         if os.path.isfile(os.path.join(d, "registry.json")):
             return d
-    return ART_CANDIDATES[0]
+    raise FileNotFoundError(
+        f"genomics registry.json not found. Checked: {ART_CANDIDATES}"
+    )
 
 
 def _resolve_model_path(path: str) -> str:

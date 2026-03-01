@@ -12,7 +12,7 @@ ART_DIR = os.path.join(REPO_ROOT, "artifacts", "tabular")
 ALT_ART_DIR = os.path.join(REPO_ROOT, "backend", "artifacts", "tabular")
 REGISTRY = os.path.join(ART_DIR, "registry.json")
 
-_cached = {"model": None, "meta": None, "explainer": None, "feature_cols": None}
+_cached = {"model": None, "meta": None, "explainer": None, "feature_cols": None, "classes": None, "target_idx": None}
 
 def _read_json(path: str):
     with open(path, "r", encoding="utf-8") as f:
@@ -52,6 +52,12 @@ def get_model():
         if card_path:
             card = _read_json(card_path)
             _cached["feature_cols"] = card.get("features")
+            card_classes = card.get("classes")
+            if isinstance(card_classes, list) and card_classes:
+                _cached["classes"] = [str(c) for c in card_classes]
+            _cached["target_idx"] = card.get("target_index_diabetic")
+        if _cached["classes"] is None and hasattr(_cached["model"], "classes_"):
+            _cached["classes"] = [str(c) for c in _cached["model"].classes_]
     return _cached["model"], _cached["meta"]
 
 def build_input_df(payload: dict) -> pd.DataFrame:
@@ -65,10 +71,18 @@ def predict_with_explain(payload: dict, max_features: int = 10):
     model, meta = get_model()
     X = build_input_df(payload)
 
-    proba = model.predict_proba(X)[0]
-    # binary
-    p_t2d = float(proba[1])
-    predicted_label = "t2d" if p_t2d >= 0.5 else "not_diabetic"
+    proba = model.predict_proba(X)[0].astype(float)
+    class_names = _cached["classes"] or [str(i) for i in range(len(proba))]
+    if len(class_names) != len(proba):
+        class_names = [str(i) for i in range(len(proba))]
+    class_to_idx = {c: i for i, c in enumerate(class_names)}
+    predicted_label = class_names[int(np.argmax(proba))]
+    target_idx = _cached["target_idx"]
+    if target_idx is None or not (0 <= int(target_idx) < len(proba)):
+        target_idx = class_to_idx.get("diabetic")
+        if target_idx is None:
+            target_idx = class_to_idx.get("t2d", len(proba) - 1)
+    p_t2d = float(proba[int(target_idx)])
 
     explain_method = "shap"
     shap_top = []
@@ -78,7 +92,7 @@ def predict_with_explain(payload: dict, max_features: int = 10):
         if _cached["explainer"] is None:
             bg = X.copy()
             _cached["explainer"] = shap.Explainer(
-                lambda data: model.predict_proba(pd.DataFrame(data, columns=X.columns))[:, 1],
+                lambda data: model.predict_proba(pd.DataFrame(data, columns=X.columns))[:, int(target_idx)],
                 bg
             )
         explainer = _cached["explainer"]
@@ -96,7 +110,7 @@ def predict_with_explain(payload: dict, max_features: int = 10):
             x_alt = X.copy()
             x_alt.at[0, feat] = np.nan
             try:
-                p_alt = float(model.predict_proba(x_alt)[0][1])
+                p_alt = float(model.predict_proba(x_alt)[0][int(target_idx)])
                 fallback_pairs.append((feat, base - p_alt, X.iloc[0][feat]))
             except Exception:
                 continue
@@ -106,11 +120,15 @@ def predict_with_explain(payload: dict, max_features: int = 10):
             for f, v, val in fallback_pairs[:max_features]
         ]
 
+    probs = {class_names[i]: float(proba[i]) for i in range(len(class_names))}
+    # Backward-compatible key used by fusion/monitoring code.
+    probs["t2d"] = p_t2d
+
     return {
         "model_name": meta["model_name"],
         "model_version": meta["model_version"],
         "predicted_label": predicted_label,
-        "probabilities": {"not_diabetic": float(proba[0]), "t2d": float(proba[1])},
+        "probabilities": probs,
         "explainability": {"method": explain_method, "top_features": shap_top},
     }
 

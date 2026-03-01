@@ -1,8 +1,12 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { getAuth } from "../lib/authStore";
 import Locked from "./Locked.jsx";
 import { isLockedError, lockedMessage } from "../lib/errors";
+
+const COUNTRY_RE = /^[A-Z]{2}$/;
+const PATIENT_KEY_RE = /^[A-Za-z0-9_-]{3,64}$/;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 export default function FusionScreening(){
   const DEFAULT_GENO_FEATURES = [
@@ -44,11 +48,51 @@ export default function FusionScreening(){
     return label || "N/A";
   };
 
+  function genomicsSpec(feature){
+    const f = String(feature || "").toLowerCase();
+    if (f.includes("rs")) {
+      return { min: 0, max: 2, step: 1, hint: "Expected range: 0-2 (genotype code)" };
+    }
+    if (f === "age") {
+      return { min: 0, max: 120, step: 1, hint: "Expected range: 0-120 years" };
+    }
+    if (f === "bmi") {
+      return { min: 10, max: 80, step: 0.1, hint: "Expected range: 10-80 kg/m2" };
+    }
+    if (f === "hba1c" || f.includes("hba1c")) {
+      return { min: 3, max: 20, step: 0.1, hint: "Expected range: 3-20 %" };
+    }
+    return { min: undefined, max: undefined, step: 0.01, hint: "Expected range: numeric value" };
+  }
+
   function set(k, v){ setForm((p) => ({ ...p, [k]: v })); }
   function setGeno(k, v){ setGenomicsForm((p) => ({ ...p, [k]: v })); }
+  function checkRange(name, value, min, max){
+    if (value === "" || value === null || value === undefined) return null;
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < min || n > max) return `${name} must be between ${min} and ${max}.`;
+    return null;
+  }
+  function extractErrorMessage(e){
+    const detail = e?.response?.data?.detail;
+    if (typeof detail === "string" && detail.trim()) return detail;
+    if (Array.isArray(detail)) {
+      return detail.map((d) => {
+        if (typeof d === "string") return d;
+        const loc = Array.isArray(d?.loc) ? d.loc.join(".") : "";
+        const msg = d?.msg || JSON.stringify(d);
+        return loc ? `${loc}: ${msg}` : msg;
+      }).join(" | ");
+    }
+    if (detail && typeof detail === "object") return JSON.stringify(detail);
+    if (typeof e?.response?.data === "string" && e.response.data.trim()) return e.response.data;
+    if (e?.message) return e.message;
+    return "Fusion prediction failed";
+  }
 
   useEffect(() => {
     let alive = true;
+    if (!auth?.access_token) return () => { alive = false; };
     api.get("/api/genomics/model-card")
       .then((r) => {
         if (!alive) return;
@@ -64,7 +108,7 @@ export default function FusionScreening(){
       })
       .catch(() => {});
     return () => { alive = false; };
-  }, []);
+  }, [auth?.access_token]);
 
   function parseGenomicsCsv(text){
     const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
@@ -91,6 +135,42 @@ export default function FusionScreening(){
       setBusy(false);
       return;
     }
+    if (!COUNTRY_RE.test(country.trim().toUpperCase())) {
+      setErr("Country must be a 2-letter code (for example, NG).");
+      setBusy(false);
+      return;
+    }
+    if (!isPublic && !PATIENT_KEY_RE.test(patientKey.trim())) {
+      setErr("Patient key must be 3-64 chars (letters, numbers, underscore, hyphen).");
+      setBusy(false);
+      return;
+    }
+    const tabularChecks = [
+      checkRange("Age", form.age, 0, 120),
+      checkRange("BMI", form.bmi, 10, 80),
+      checkRange("Waist circumference", form.waist_circumference, 40, 220),
+      checkRange("Hip circumference", form.hip_circumference, 40, 240),
+      checkRange("Systolic BP", form.systolic_bp, 70, 260),
+      checkRange("Diastolic BP", form.diastolic_bp, 40, 160),
+    ].filter(Boolean);
+    if (tabularChecks.length) {
+      setErr(tabularChecks[0]);
+      setBusy(false);
+      return;
+    }
+    if (retinaFile) {
+      if (!String(retinaFile.type || "").startsWith("image/")) { setErr("Retina file must be an image."); setBusy(false); return; }
+      if (retinaFile.size > MAX_IMAGE_BYTES) { setErr("Retina image is too large (max 10MB)."); setBusy(false); return; }
+    }
+    if (skinFile) {
+      if (!String(skinFile.type || "").startsWith("image/")) { setErr("Skin file must be an image."); setBusy(false); return; }
+      if (skinFile.size > MAX_IMAGE_BYTES) { setErr("Skin image is too large (max 10MB)."); setBusy(false); return; }
+    }
+    if (genomicsFile && !String(genomicsFile.name || "").toLowerCase().endsWith(".csv")) {
+      setErr("Genomics upload must be a .csv file.");
+      setBusy(false);
+      return;
+    }
 
     try {
       let genomics = {};
@@ -109,6 +189,9 @@ export default function FusionScreening(){
         const raw = (genomicsForm[k] ?? "").toString().trim();
         if (!raw) return;
         const n = Number(raw);
+        const spec = genomicsSpec(k);
+        if (Number.isFinite(n) && spec.min !== undefined && n < spec.min) throw new Error(`${k} must be >= ${spec.min}.`);
+        if (Number.isFinite(n) && spec.max !== undefined && n > spec.max) throw new Error(`${k} must be <= ${spec.max}.`);
         genomics[k] = Number.isNaN(n) ? raw : n;
       });
       if (!Object.keys(genomics).length) genomics = null;
@@ -125,20 +208,37 @@ export default function FusionScreening(){
       if (retinaFile) fd.append("retina", retinaFile);
       if (skinFile) fd.append("skin", skinFile);
 
-      const r = await api.post("/api/fusion/predict", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      const r = await api.post("/api/fusion/predict", fd);
       setResult(r.data);
       setPredId(r.data.prediction_id);
     } catch (e) {
       if (isLockedError(e)) setLocked(lockedMessage(e));
-      else setErr(e?.response?.data?.detail || "Fusion prediction failed");
+      else setErr(extractErrorMessage(e));
     } finally {
       setBusy(false);
     }
   }
 
-  function downloadPdf(){
+  async function downloadPdf(){
     if (!predId) return;
-    window.open(`${import.meta.env.VITE_API_URL}/api/fusion/report/${predId}`, "_blank");
+    setErr("");
+    try {
+      const res = await api.get(`/api/fusion/report/${predId}`, {
+        responseType: "blob",
+      });
+      const blob = new Blob([res.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `glucolens_fusion_report_${predId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      if (isLockedError(e)) setLocked(lockedMessage(e));
+      else setErr(extractErrorMessage(e) || "Failed to download report");
+    }
   }
 
   if (locked) return <Locked message={locked} />;
@@ -158,16 +258,18 @@ export default function FusionScreening(){
 
       <div style={{ height: 16 }} />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16, alignItems: "start" }}>
+      <div className="row" style={{ alignItems: "start", marginTop: 0 }}>
         <div className="card">
           <h3 style={{ marginTop:0 }}>Tabular Mode</h3>
           <label className="small">Country</label>
-          <input className="input" value={country} onChange={e=>setCountry(e.target.value.toUpperCase())} />
+          <input className="input" value={country} maxLength={2} onChange={e=>setCountry(e.target.value.toUpperCase())} placeholder="NG" />
+          <div className="small">Expected format: 2-letter ISO code</div>
 
           {!isPublic && (
             <>
               <label className="small">Patient key</label>
-              <input className="input" value={patientKey} onChange={e=>setPatientKey(e.target.value)} placeholder="PAT_001_ABC" />
+              <input className="input" value={patientKey} maxLength={64} onChange={e=>setPatientKey(e.target.value)} placeholder="PAT_001_ABC" />
+              <div className="small">Expected format: 3-64 chars (A-Z, 0-9, _, -)</div>
               <div style={{height:10}} />
             </>
           )}
@@ -175,7 +277,8 @@ export default function FusionScreening(){
           <div className="row" style={{marginTop:10}}>
             <div>
               <label className="small">Age</label>
-              <input className="input" value={form.age} onChange={e=>set("age",e.target.value)} />
+              <input className="input" type="number" min="0" max="120" step="1" inputMode="numeric" value={form.age} onChange={e=>set("age",e.target.value)} placeholder="45 (0-120)" />
+              <div className="small">Expected range: 0-120 years</div>
             </div>
             <div>
               <label className="small">Sex</label>
@@ -186,21 +289,70 @@ export default function FusionScreening(){
           </div>
 
           <div className="row" style={{marginTop:10}}>
-            <div><label className="small">BMI</label><input className="input" value={form.bmi} onChange={e=>set("bmi",e.target.value)} /></div>
-            <div><label className="small">Waist</label><input className="input" value={form.waist_circumference} onChange={e=>set("waist_circumference",e.target.value)} /></div>
+            <div>
+              <label className="small">BMI</label>
+              <input className="input" type="number" min="10" max="80" step="0.1" inputMode="decimal" value={form.bmi} onChange={e=>set("bmi",e.target.value)} placeholder="31.2 (10-80)" />
+              <div className="small">Expected range: 10-80 kg/m2²</div>
+            </div>
+            <div>
+              <label className="small">Waist</label>
+              <input className="input" type="number" min="40" max="220" step="0.1" inputMode="decimal" value={form.waist_circumference} onChange={e=>set("waist_circumference",e.target.value)} placeholder="98 (40-220)" />
+              <div className="small">Expected range: 40-220 cm</div>
+            </div>
           </div>
 
           <div className="row" style={{marginTop:10}}>
-            <div><label className="small">Hip</label><input className="input" value={form.hip_circumference} onChange={e=>set("hip_circumference",e.target.value)} /></div>
-            <div><label className="small">SBP</label><input className="input" value={form.systolic_bp} onChange={e=>set("systolic_bp",e.target.value)} /></div>
+            <div>
+              <label className="small">Hip</label>
+              <input className="input" type="number" min="40" max="240" step="0.1" inputMode="decimal" value={form.hip_circumference} onChange={e=>set("hip_circumference",e.target.value)} placeholder="105 (40-240)" />
+              <div className="small">Expected range: 40-240 cm</div>
+            </div>
+            <div>
+              <label className="small">SBP</label>
+              <input className="input" type="number" min="70" max="260" step="1" inputMode="numeric" value={form.systolic_bp} onChange={e=>set("systolic_bp",e.target.value)} placeholder="145 (70-260)" />
+              <div className="small">Expected range: 70-260 mmHg</div>
+            </div>
           </div>
 
           <div style={{marginTop:10}}>
             <label className="small">DBP</label>
-            <input className="input" value={form.diastolic_bp} onChange={e=>set("diastolic_bp",e.target.value)} />
+            <input className="input" type="number" min="40" max="160" step="1" inputMode="numeric" value={form.diastolic_bp} onChange={e=>set("diastolic_bp",e.target.value)} placeholder="90 (40-160)" />
+            <div className="small">Expected range: 40-160 mmHg</div>
           </div>
         </div>
 
+        <div className="card">
+          <h3 style={{ marginTop:0 }}>Genomics Mode</h3>
+          <label className="small">Enter genomic features</label>
+          <div className="row" style={{marginTop:8}}>
+            {genomicsFeatures.map((k)=>(
+              <div key={k}>
+                <label className="small">{k}</label>
+                <input
+                  className="input"
+                  type="number"
+                  step={genomicsSpec(k).step}
+                  min={genomicsSpec(k).min}
+                  max={genomicsSpec(k).max}
+                  inputMode="decimal"
+                  value={genomicsForm[k] ?? ""}
+                  onChange={e=>setGeno(k, e.target.value)}
+                  placeholder="Numeric value only"
+                />
+                <div className="small">{genomicsSpec(k).hint}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{height:10}} />
+          <label className="small">Or upload one genomics CSV row</label><br/>
+          <input type="file" accept=".csv,text/csv" onChange={e=>setGenomicsFile(e.target.files?.[0]||null)} />
+          <p className="small" style={{ marginTop:6 }}>
+            CSV format: first line headers, second line one patient row.
+          </p>
+        </div>
+      </div>
+
+      <div className="row" style={{ alignItems: "start", marginTop: 16 }}>
         <div className="card">
           <h3 style={{ marginTop:0 }}>Retina Mode</h3>
           <label className="small">Optional retina image</label><br/>
@@ -218,26 +370,9 @@ export default function FusionScreening(){
             JPG/PNG, clear focus, minimal blur/glare, evenly lit, min 512x512 (recommended 1024x1024+), up to 10MB.
           </p>
         </div>
+      </div>
 
-        <div className="card">
-          <h3 style={{ marginTop:0 }}>Genomics Mode</h3>
-          <label className="small">Enter genomic features</label>
-          <div className="row" style={{marginTop:8}}>
-            {genomicsFeatures.map((k)=>(
-              <div key={k}>
-                <label className="small">{k}</label>
-                <input className="input" value={genomicsForm[k] ?? ""} onChange={e=>setGeno(k, e.target.value)} />
-              </div>
-            ))}
-          </div>
-          <div style={{height:10}} />
-          <label className="small">Or upload one genomics CSV row</label><br/>
-          <input type="file" accept=".csv,text/csv" onChange={e=>setGenomicsFile(e.target.files?.[0]||null)} />
-          <p className="small" style={{ marginTop:6 }}>
-            CSV format: first line headers, second line one patient row.
-          </p>
-        </div>
-
+      <div className="row" style={{ alignItems: "start", marginTop: 16 }}>
         <div className="card">
           <h3 style={{ marginTop:0 }}>Run Fusion</h3>
           <button className="btn" onClick={run} disabled={busy}>{busy ? "Running..." : "Run Fusion Screening"}</button>
@@ -280,7 +415,9 @@ export default function FusionScreening(){
             </>
           )}
         </div>
+      </div>
 
+      <div className="row" style={{ alignItems: "start", marginTop: 16 }}>
         <div className="card">
           <h3 style={{marginTop:0}}>Retina Grad-CAM (if present)</h3>
           {!retinaOverlay ? <p className="small">No overlay.</p> : (
@@ -298,3 +435,7 @@ export default function FusionScreening(){
     </div>
   );
 }
+
+
+
+

@@ -1,83 +1,98 @@
 import io
-import json
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import cm
 
+
 def render_tabular_report_pdf(*, prediction: dict, model_card: dict, performance: dict) -> bytes:
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
-    w, h = A4
+    _, h = A4
 
-    y = h - 2*cm
+    y = h - 2 * cm
     c.setFont("Helvetica-Bold", 16)
-    c.drawString(2*cm, y, "GlucoLens — Diabetes Risk Screening Report (Tabular)")
-    y -= 0.8*cm
+    c.drawString(2 * cm, y, "GlucoLens - Diabetes Risk Screening Report (Tabular)")
+    y -= 0.8 * cm
 
     c.setFont("Helvetica", 10)
-    c.drawString(2*cm, y, "Note: This is a screening support tool and does not replace laboratory diagnosis.")
-    y -= 1.0*cm
+    c.drawString(2 * cm, y, "Note: This is a screening support tool and does not replace laboratory diagnosis.")
+    y -= 1.0 * cm
 
-    # Prediction summary
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(2*cm, y, "Prediction Summary")
-    y -= 0.6*cm
+    c.drawString(2 * cm, y, "Prediction Summary")
+    y -= 0.6 * cm
 
     c.setFont("Helvetica", 11)
-    c.drawString(2*cm, y, f"Predicted label: {prediction.get('predicted_label')}")
-    y -= 0.5*cm
-    probs = prediction.get("probabilities", {})
-    c.drawString(2*cm, y, f"Probability not diabetic: {probs.get('not_diabetic', 0):.3f}")
-    y -= 0.5*cm
-    c.drawString(2*cm, y, f"Probability T2D: {probs.get('t2d', 0):.3f}")
-    y -= 0.8*cm
+    c.drawString(2 * cm, y, f"Predicted label: {prediction.get('predicted_label')}")
+    y -= 0.5 * cm
 
-    # Explainability
+    probs = prediction.get("probabilities", {})
+    ordered = []
+    for key in ["non_diabetic", "prediabetic", "diabetic", "not_diabetic"]:
+        if key in probs:
+            ordered.append((key, probs.get(key, 0.0)))
+    for k, v in probs.items():
+        if k == "t2d":
+            continue
+        if all(k != kk for kk, _ in ordered):
+            ordered.append((k, v))
+
+    for k, v in ordered:
+        c.drawString(2 * cm, y, f"Probability {k}: {float(v):.3f}")
+        y -= 0.5 * cm
+
+    if "t2d" in probs:
+        c.drawString(2 * cm, y, f"Probability t2d (compat): {float(probs.get('t2d', 0.0)):.3f}")
+        y -= 0.5 * cm
+
+    y -= 0.3 * cm
+
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(2*cm, y, "Top Contributing Features (SHAP)")
-    y -= 0.6*cm
+    c.drawString(2 * cm, y, "Top Contributing Features (SHAP)")
+    y -= 0.6 * cm
 
     c.setFont("Helvetica", 10)
     top = (prediction.get("explainability") or {}).get("top_features") or []
     if not top:
-        c.drawString(2*cm, y, "No SHAP details available.")
-        y -= 0.5*cm
+        c.drawString(2 * cm, y, "No SHAP details available.")
+        y -= 0.5 * cm
     else:
         for item in top[:10]:
-            if y < 3*cm:
+            if y < 3 * cm:
                 c.showPage()
-                y = h - 2*cm
+                y = h - 2 * cm
                 c.setFont("Helvetica", 10)
             c.drawString(
-                2*cm, y,
-                f"- {item.get('feature')}: shap={item.get('shap_value'):.4f} | value={item.get('value')}"
+                2 * cm,
+                y,
+                f"- {item.get('feature')}: shap={item.get('shap_value'):.4f} | value={item.get('value')}",
             )
-            y -= 0.45*cm
+            y -= 0.45 * cm
 
-    y -= 0.4*cm
+    y -= 0.4 * cm
 
-    # Model card summary
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(2*cm, y, "Model Card (Summary)")
-    y -= 0.6*cm
+    c.drawString(2 * cm, y, "Model Card (Summary)")
+    y -= 0.6 * cm
 
     c.setFont("Helvetica", 10)
-    c.drawString(2*cm, y, f"Model: {model_card.get('model_name')}  Version: {model_card.get('model_version')}")
-    y -= 0.45*cm
-    c.drawString(2*cm, y, f"Intended use: {model_card.get('intended_use', '')[:110]}")
-    y -= 0.45*cm
+    c.drawString(2 * cm, y, f"Model: {model_card.get('model_name')}  Version: {model_card.get('model_version')}")
+    y -= 0.45 * cm
+    c.drawString(2 * cm, y, f"Intended use: {model_card.get('intended_use', '')[:110]}")
+    y -= 0.45 * cm
 
-    # Performance summary
-    oof = (model_card.get("metrics_oof") or {})
+    oof = model_card.get("metrics_oof") or {}
     if oof:
-        c.drawString(2*cm, y, f"OOF AUROC: {oof.get('auroc', 0):.3f}  (95% CI: {oof.get('auroc_95ci', ['?','?'])[0]}–{oof.get('auroc_95ci', ['?','?'])[1]})")
-        y -= 0.45*cm
-        c.drawString(2*cm, y, f"Brier: {oof.get('brier', 0):.4f} | ECE: {oof.get('ece', 0):.4f}")
-        y -= 0.45*cm
+        ci = oof.get("auroc_95ci") or ["?", "?"]
+        c.drawString(2 * cm, y, f"OOF AUROC: {oof.get('auroc', 0):.3f}  (95% CI: {ci[0]}-{ci[1]})")
+        y -= 0.45 * cm
+        ece_val = float(oof.get("ece_diabetic_vs_rest", oof.get("ece", 0.0)))
+        c.drawString(2 * cm, y, f"Brier: {oof.get('brier', 0):.4f} | ECE(diabetic-vs-rest): {ece_val:.4f}")
+        y -= 0.45 * cm
 
     c.setFont("Helvetica-Oblique", 9)
-    y = 2*cm
-    c.drawString(2*cm, y, "Generated by GlucoLens • Store audit logs + prediction records for monitoring and outcome linkage.")
+    y = 2 * cm
+    c.drawString(2 * cm, y, "Generated by GlucoLens - Store audit logs and prediction records for monitoring.")
 
     c.showPage()
     c.save()

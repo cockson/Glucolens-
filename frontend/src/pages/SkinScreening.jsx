@@ -3,6 +3,8 @@ import { api } from "../lib/api";
 import Locked from "./Locked.jsx";
 import { isLockedError, lockedMessage } from "../lib/errors";
 
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+
 export default function SkinScreening(){
   const [file,setFile]=useState(null);
   const [result,setResult]=useState(null);
@@ -19,6 +21,8 @@ export default function SkinScreening(){
   async function run(){
     setErr(""); setResult(null); setPredId(null);
     if(!file){ setErr("Choose an image."); return; }
+    if (!String(file.type || "").startsWith("image/")) { setErr("Selected file must be an image."); return; }
+    if (file.size > MAX_IMAGE_BYTES) { setErr("Image is too large (max 10MB)."); return; }
     setBusy(true);
     try{
       const fd = new FormData();

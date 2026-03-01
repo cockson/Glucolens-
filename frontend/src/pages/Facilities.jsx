@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { api } from "../lib/api";
 
+const COUNTRY_RE = /^[A-Z]{2}$/;
+
 export default function Facilities(){
   const [country,setCountry]=useState(import.meta.env.VITE_DEFAULT_COUNTRY || "NG");
   const [type,setType]=useState("hospital");
@@ -11,10 +13,12 @@ export default function Facilities(){
   async function search(){
     setErr("");
     try{
-      const res = await api.get("/api/tenancy/public/facilities", { params: { country_code: country, facility_type: type, q }});
+      const cc = country.trim().toUpperCase();
+      if (!COUNTRY_RE.test(cc)) throw new Error("Country must be a 2-letter code (for example, NG).");
+      const res = await api.get("/api/tenancy/public/facilities", { params: { country_code: cc, facility_type: type, q: q.trim() }});
       setRows(res.data);
     }catch(e){
-      setErr("Search failed");
+      setErr(e?.message || "Search failed");
     }
   }
 
@@ -25,7 +29,8 @@ export default function Facilities(){
         <div className="row">
           <div>
             <label className="small">Country</label>
-            <input className="input" value={country} onChange={e=>setCountry(e.target.value.toUpperCase())}/>
+            <input className="input" value={country} maxLength={2} onChange={e=>setCountry(e.target.value.toUpperCase())} placeholder="NG"/>
+            <div className="small">Expected format: 2-letter ISO code</div>
           </div>
           <div>
             <label className="small">Type</label>
@@ -37,7 +42,7 @@ export default function Facilities(){
           </div>
           <div>
             <label className="small">Search</label>
-            <input className="input" value={q} onChange={e=>setQ(e.target.value)} placeholder="e.g., Ikeja"/>
+            <input className="input" value={q} maxLength={80} onChange={e=>setQ(e.target.value)} placeholder="e.g., Ikeja"/>
           </div>
           <div style={{ display:"flex", alignItems:"end" }}>
             <button className="btn" onClick={search}>Search</button>

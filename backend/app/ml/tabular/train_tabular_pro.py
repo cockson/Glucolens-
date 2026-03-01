@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 
 from joblib import dump
-from scipy.special import expit
 
 from sklearn.model_selection import StratifiedKFold, RandomizedSearchCV
 from sklearn.pipeline import Pipeline
@@ -11,7 +10,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import (
-    roc_auc_score, average_precision_score, brier_score_loss,
+    roc_auc_score, average_precision_score,
     accuracy_score, f1_score, log_loss
 )
 from sklearn.linear_model import LogisticRegression
@@ -35,13 +34,31 @@ os.makedirs(ART_DIR, exist_ok=True)
 
 TARGET = "diabetes_status"
 SOURCE_COL = "source_file"
+CLASS_ORDER = ["non_diabetic", "prediabetic", "diabetic"]
 
-FEATURES = [
-    "age","sex","bmi","waist_circumference","hip_circumference","systolic_bp","diastolic_bp"
+# Core screening features expected for normal operation.
+REQUIRED_FEATURES = [
+    "age", "sex", "bmi", "waist_circumference", "systolic_bp", "diastolic_bp"
 ]
+
+# Optional training-only features when available in dataset.
+OPTIONAL_FEATURES = [
+    "whr", "pulse_pressure",
+    "bmi_category", "central_obesity", "smoking_status", "alcohol_use", "physical_activity",
+    "family_history_diabetes", "family_history_cvd", "hypertension_status",
+    "fasting_glucose_mgdl", "hba1c_pct",
+    "total_cholesterol_mgdl", "hdl_mgdl", "ldl_mgdl", "triglycerides_mgdl",
+    "cvd_risk_10yr_pct", "cvd_risk_category",
+    "on_antihypertensive", "on_statin",
+]
+
+FEATURES = REQUIRED_FEATURES + OPTIONAL_FEATURES
+MAX_MISSING_RATE = 0.45
+LEAKY_COLS = {"label", "on_antidiabetic", "diabetes", "diabetes_dx"}
 
 COL_ALIASES = {
     "diabete_status": "diabetes_status",
+    "diabetic_status": "diabetes_status",
     "diabetesstatus": "diabetes_status",
     "gender": "sex",
     "age_years": "age",
@@ -57,6 +74,15 @@ COL_ALIASES = {
     "diastolic": "diastolic_bp",
     "diastolic_bp_mmhg": "diastolic_bp",
     "dbp": "diastolic_bp",
+    "waist_hip_ratio": "whr",
+    "fasting_glucose": "fasting_glucose_mgdl",
+    "hba1c": "hba1c_pct",
+    "hba1c_percent": "hba1c_pct",
+    "total_cholesterol": "total_cholesterol_mgdl",
+    "hdl": "hdl_mgdl",
+    "ldl": "ldl_mgdl",
+    "triglycerides": "triglycerides_mgdl",
+    "cvd_risk_10yr": "cvd_risk_10yr_pct",
 }
 
 
@@ -70,6 +96,28 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     renames = {c: COL_ALIASES[c] for c in df.columns if c in COL_ALIASES}
     if renames:
         df = df.rename(columns=renames)
+
+    # If aliases map multiple source columns into the same canonical name,
+    # coalesce duplicates row-wise (first non-null), then keep one column.
+    dup_names = pd.Index(df.columns[df.columns.duplicated()]).unique()
+    for name in dup_names:
+        same = df.loc[:, df.columns == name]
+        coalesced = same.bfill(axis=1).iloc[:, 0]
+        df = df.loc[:, df.columns != name]
+        df[name] = coalesced
+    return df
+
+def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    if "whr" not in df.columns and {"waist_circumference", "hip_circumference"}.issubset(df.columns):
+        hip = pd.to_numeric(df["hip_circumference"], errors="coerce")
+        waist = pd.to_numeric(df["waist_circumference"], errors="coerce")
+        denom = hip.replace(0, np.nan)
+        df["whr"] = waist / denom
+    if "pulse_pressure" not in df.columns and {"systolic_bp", "diastolic_bp"}.issubset(df.columns):
+        sbp = pd.to_numeric(df["systolic_bp"], errors="coerce")
+        dbp = pd.to_numeric(df["diastolic_bp"], errors="coerce")
+        df["pulse_pressure"] = sbp - dbp
     return df
 
 # -------- DeLong AUROC CI (OOF) --------
@@ -152,6 +200,13 @@ def calibration_slope_intercept(y, p):
     intercept = float(lr.intercept_[0])
     return slope, intercept
 
+def multiclass_brier(y_true, proba, n_classes):
+    y_true = np.asarray(y_true).astype(int)
+    proba = np.asarray(proba).astype(float)
+    oh = np.zeros((len(y_true), n_classes), dtype=float)
+    oh[np.arange(len(y_true)), y_true] = 1.0
+    return float(np.mean(np.sum((proba - oh) ** 2, axis=1)))
+
 # -------- Decision Curve Analysis --------
 def decision_curve_net_benefit(y, p, thresholds=None):
     y = np.asarray(y).astype(int)
@@ -168,9 +223,30 @@ def decision_curve_net_benefit(y, p, thresholds=None):
         out.append({"threshold": float(t), "net_benefit": float(nb)})
     return out
 
+def infer_feature_types(df: pd.DataFrame, feature_cols, numeric_threshold: float = 0.85):
+    cats, nums = [], []
+    missing_tokens = {"", " ", "na", "n/a", "nan", "null", "none", "-", "--"}
+    for c in feature_cols:
+        if c not in df.columns:
+            continue
+        s = df[c]
+        if pd.api.types.is_numeric_dtype(s):
+            nums.append(c)
+            continue
+        # Try coercion for string-like columns.
+        s_txt = s.astype(str).str.strip()
+        s_txt = s_txt.mask(s_txt.str.lower().isin(missing_tokens), np.nan)
+        coerced = pd.to_numeric(s_txt, errors="coerce")
+        non_na = s_txt.notna().sum()
+        frac_numeric = (coerced.notna().sum() / non_na) if non_na else 0.0
+        if frac_numeric >= numeric_threshold and c != "sex":
+            nums.append(c)
+        else:
+            cats.append(c)
+    return nums, cats
+
 def build_preprocess(df, feature_cols):
-    cats = [c for c in feature_cols if df[c].dtype == "object" or c == "sex"]
-    nums = [c for c in feature_cols if c not in cats]
+    nums, cats = infer_feature_types(df, feature_cols)
 
     num_pipe = Pipeline([
         ("imputer", SimpleImputer(strategy="median")),
@@ -210,41 +286,74 @@ def candidate_models():
         })
     }
 
-def map_target_to_binary(series: pd.Series) -> np.ndarray:
+def map_target_to_multiclass(series: pd.Series):
     y_raw = series.astype(str).str.strip().str.lower()
 
-    neg = {
-        "0", "no", "n", "not_diabetic", "prediabetes", "negative", "false",
-        "non-diabetic", "nondiabetic", "normal", "healthy"
+    non_diabetic = {
+        "0", "no", "n", "negative", "false", "normal", "healthy",
+        "non_diabetic", "not_diabetic", "non-diabetic", "nondiabetic",
     }
-    pos = {
+    prediabetic = {"prediabetes", "prediabetic", "pre-diabetes", "pre_diabetes", "impaired_glucose_tolerance"}
+    diabetic = {
         "1", "yes", "y", "diabetic", "diabetes", "positive", "true",
         "t2d", "type2", "type_2", "type-2"
     }
 
-    y = y_raw.map(lambda v: 0 if v in neg else (1 if v in pos else np.nan))
+    mapped = y_raw.map(
+        lambda v: "non_diabetic" if v in non_diabetic else (
+            "prediabetic" if v in prediabetic else ("diabetic" if v in diabetic else np.nan)
+        )
+    )
+    present_classes = [c for c in CLASS_ORDER if c in set(mapped.dropna().tolist())]
+    idx_map = {name: idx for idx, name in enumerate(present_classes)}
+    y = mapped.map(idx_map)
     if y.isna().any():
         bad = sorted(set(y_raw[y.isna()]))[:30]
         raise ValueError(
             f"Unrecognized labels in {TARGET}: {bad} (showing up to 30). "
-            "Fix your labels or expand pos/neg mappings."
+            "Fix your labels or expand class mappings."
         )
 
-    return y.astype(int).to_numpy()
+    return y.astype(int).to_numpy(), present_classes
 
 
 def main(csv_path: str):
     df = pd.read_csv(csv_path)
     df = normalize_columns(df)
+    df = add_derived_features(df)
+
     # Ensure required features exist
-    for c in FEATURES:
+    for c in REQUIRED_FEATURES:
         if c not in df.columns:
             df[c] = np.nan
 
     if TARGET not in df.columns:
         raise ValueError(f"Missing target col {TARGET}")
-    y = map_target_to_binary(df[TARGET])
-    X = df[FEATURES].copy()
+    target_obj = df[TARGET]
+    if isinstance(target_obj, pd.DataFrame):
+        target_series = target_obj.bfill(axis=1).iloc[:, 0]
+    else:
+        target_series = target_obj
+    y, class_names = map_target_to_multiclass(target_series)
+    n_classes = len(class_names)
+    if n_classes < 2:
+        raise ValueError(f"Need at least 2 classes for training. Found: {class_names}")
+    diabetic_idx = class_names.index("diabetic") if "diabetic" in class_names else (n_classes - 1)
+    available = [c for c in FEATURES if c in df.columns]
+    if not available:
+        raise ValueError("No usable feature columns found in dataset after normalization.")
+    missing_rate = df[available].isna().mean().to_dict()
+    filtered = []
+    dropped_missing = []
+    for c in available:
+        if c in LEAKY_COLS:
+            continue
+        # Keep core screening fields even when missing is high; drop optional features that are mostly missing.
+        if c not in REQUIRED_FEATURES and missing_rate.get(c, 1.0) > MAX_MISSING_RATE:
+            dropped_missing.append(c)
+            continue
+        filtered.append(c)
+    X = df[filtered].copy()
 
     # Drop columns that are entirely missing to avoid imputer warnings/unstable transforms
     all_missing = [c for c in X.columns if X[c].isna().all()]
@@ -252,7 +361,14 @@ def main(csv_path: str):
         print("Dropping all-missing features:", all_missing)
         X = X.drop(columns=all_missing)
 
-    feature_cols = [c for c in FEATURES if c in X.columns]
+    if dropped_missing:
+        print(f"Dropping high-missing optional features (>{int(MAX_MISSING_RATE*100)}% missing):", dropped_missing)
+    feature_cols = list(X.columns)
+    nums_inferred, cats_inferred = infer_feature_types(X, feature_cols)
+    for c in nums_inferred:
+        X[c] = pd.to_numeric(X[c], errors="coerce")
+    for c in cats_inferred:
+        X[c] = X[c].astype("object")
 
     # ---- External validation: site-held-out by source_file ----
     if SOURCE_COL in df.columns and df[SOURCE_COL].nunique() >= 3:
@@ -267,6 +383,7 @@ def main(csv_path: str):
 
     X_train, y_train = X[train_mask], y[train_mask]
     X_ext, y_ext = X[ext_mask], y[ext_mask]
+    search_scoring = "roc_auc" if n_classes == 2 else "roc_auc_ovr_weighted"
 
     pre = build_preprocess(pd.concat([X_train, X_ext], axis=0), feature_cols)
 
@@ -281,7 +398,7 @@ def main(csv_path: str):
 
     def evaluate_model(name, base_estimator, param_dist, use_smote: bool, calib_method: str):
         # OOF preds for honest metrics
-        oof = np.zeros(len(X_train), dtype=float)
+        oof = np.zeros((len(X_train), n_classes), dtype=float)
         best_params_list = []
 
         use_smote_effective = bool(use_smote and IMBLEARN_AVAILABLE)
@@ -309,7 +426,7 @@ def main(csv_path: str):
                 pipe,
                 param_distributions=param_dist,
                 n_iter=min(12, max(6, len(param_dist))),
-                scoring="roc_auc",
+                scoring=search_scoring,
                 cv=3,
                 random_state=42,
                 n_jobs=-1,
@@ -326,19 +443,39 @@ def main(csv_path: str):
                 cv=3,
             )
             cal.fit(Xtr, ytr)
-            oof[va_idx] = cal.predict_proba(Xva)[:, 1]
+            p_fold = cal.predict_proba(Xva)
+            fold_classes = list(cal.classes_)
+            for cls_idx in range(n_classes):
+                if cls_idx in fold_classes:
+                    oof[va_idx, cls_idx] = p_fold[:, fold_classes.index(cls_idx)]
+            row_sum = oof[va_idx].sum(axis=1, keepdims=True)
+            zero_mask = (row_sum.squeeze() <= 0)
+            if np.any(zero_mask):
+                oof[va_idx[zero_mask], :] = 1.0 / n_classes
+                row_sum = oof[va_idx].sum(axis=1, keepdims=True)
+            oof[va_idx] = oof[va_idx] / row_sum
 
-        auc = roc_auc_score(y_train, oof)
-        ap = average_precision_score(y_train, oof)
-        brier = brier_score_loss(y_train, oof)
-        ece = expected_calibration_error(y_train, oof)
-        slope, intercept = calibration_slope_intercept(y_train, oof)
-        acc = accuracy_score(y_train, (oof >= 0.5).astype(int))
-        f1 = f1_score(y_train, (oof >= 0.5).astype(int))
-        ll = log_loss(y_train, np.vstack([1-oof, oof]).T, labels=[0,1])
+        if n_classes == 2:
+            p_pos = oof[:, diabetic_idx]
+            auc = roc_auc_score(y_train, p_pos)
+            ap = average_precision_score((y_train == diabetic_idx).astype(int), p_pos)
+            ece = expected_calibration_error((y_train == diabetic_idx).astype(int), p_pos)
+            slope, intercept = calibration_slope_intercept((y_train == diabetic_idx).astype(int), p_pos)
+            auc_, lo, hi = delong_auc_ci((y_train == diabetic_idx).astype(int), p_pos, alpha=0.95)
+            dca = decision_curve_net_benefit((y_train == diabetic_idx).astype(int), p_pos)
+        else:
+            auc = roc_auc_score(y_train, oof, multi_class="ovr", average="macro")
+            ap = average_precision_score((y_train == diabetic_idx).astype(int), oof[:, diabetic_idx])
+            ece = expected_calibration_error((y_train == diabetic_idx).astype(int), oof[:, diabetic_idx])
+            slope, intercept = calibration_slope_intercept((y_train == diabetic_idx).astype(int), oof[:, diabetic_idx])
+            auc_, lo, hi = np.nan, np.nan, np.nan
+            dca = decision_curve_net_benefit((y_train == diabetic_idx).astype(int), oof[:, diabetic_idx])
 
-        auc_, lo, hi = delong_auc_ci(y_train, oof, alpha=0.95)
-        dca = decision_curve_net_benefit(y_train, oof)
+        brier = multiclass_brier(y_train, oof, n_classes=n_classes)
+        yhat = oof.argmax(axis=1)
+        acc = accuracy_score(y_train, yhat)
+        f1 = f1_score(y_train, yhat, average="macro")
+        ll = log_loss(y_train, oof, labels=list(range(n_classes)))
 
         # Fit final model on all training data using best overall params (median-ish pick)
         # Simpler: re-run search on full train then calibrate with CV.
@@ -358,7 +495,7 @@ def main(csv_path: str):
             final_pipe,
             param_distributions=param_dist,
             n_iter=12,
-            scoring="roc_auc",
+            scoring=search_scoring,
             cv=3,
             random_state=42,
             n_jobs=-1,
@@ -371,14 +508,26 @@ def main(csv_path: str):
         final_cal.fit(X_train, y_train)
 
         ext_metrics = None
-        if held_out_site is not None and len(y_ext) > 0 and len(np.unique(y_ext)) == 2:
-            p_ext = final_cal.predict_proba(X_ext)[:, 1]
+        if held_out_site is not None and len(y_ext) > 0 and len(np.unique(y_ext)) >= 2:
+            p_ext_raw = final_cal.predict_proba(X_ext)
+            p_ext = np.zeros((len(X_ext), n_classes), dtype=float)
+            final_classes = list(final_cal.classes_)
+            for cls_idx in range(n_classes):
+                if cls_idx in final_classes:
+                    p_ext[:, cls_idx] = p_ext_raw[:, final_classes.index(cls_idx)]
+            row_sum_ext = p_ext.sum(axis=1, keepdims=True)
+            zero_ext = (row_sum_ext.squeeze() <= 0)
+            if np.any(zero_ext):
+                p_ext[zero_ext, :] = 1.0 / n_classes
+                row_sum_ext = p_ext.sum(axis=1, keepdims=True)
+            p_ext = p_ext / row_sum_ext
+            p_ext_t2d = p_ext[:, diabetic_idx]
             ext_metrics = {
                 "site": str(held_out_site),
-                "auroc": float(roc_auc_score(y_ext, p_ext)),
-                "auprc": float(average_precision_score(y_ext, p_ext)),
-                "brier": float(brier_score_loss(y_ext, p_ext)),
-                "ece": float(expected_calibration_error(y_ext, p_ext)),
+                "auroc_macro_ovr": float(roc_auc_score(y_ext, p_ext, multi_class="ovr", average="macro")) if n_classes > 2 else float(roc_auc_score(y_ext, p_ext_t2d)),
+                "auprc_diabetic_vs_rest": float(average_precision_score((y_ext == diabetic_idx).astype(int), p_ext_t2d)),
+                "brier_multiclass": float(multiclass_brier(y_ext, p_ext, n_classes=n_classes)),
+                "ece_diabetic_vs_rest": float(expected_calibration_error((y_ext == diabetic_idx).astype(int), p_ext_t2d)),
             }
 
         return {
@@ -387,12 +536,12 @@ def main(csv_path: str):
             "calibration": calib_method,
             "oof": {
                 "auroc": float(auc),
-                "auroc_95ci": [float(lo), float(hi)],
-                "auprc": float(ap),
+                "auroc_95ci": [float(lo), float(hi)] if n_classes == 2 else None,
+                "auprc_diabetic_vs_rest": float(ap),
                 "brier": float(brier),
-                "ece": float(ece),
-                "cal_slope": float(slope),
-                "cal_intercept": float(intercept),
+                "ece_diabetic_vs_rest": float(ece),
+                "cal_slope_diabetic_vs_rest": float(slope),
+                "cal_intercept_diabetic_vs_rest": float(intercept),
                 "accuracy": float(acc),
                 "f1": float(f1),
                 "log_loss": float(ll),
@@ -404,9 +553,10 @@ def main(csv_path: str):
         }
 
     # Train all candidates
+    calib_options = ["sigmoid", "isotonic"] if n_classes == 2 else ["sigmoid"]
     for base_name, (est, dist) in models.items():
         for use_smote in [False, True]:
-            for calib in ["sigmoid", "isotonic"]:
+            for calib in calib_options:
                 print(f"Training {base_name} | SMOTE={use_smote} | calib={calib}")
                 res = evaluate_model(base_name, est, dist, use_smote, calib)
                 comparisons.append(res)
@@ -434,9 +584,10 @@ def main(csv_path: str):
             "n_external": int(len(X_ext)),
             "held_out_site": held_out_site,
             "label_counts_train": {
-                "0": int((y_train==0).sum()),
-                "1": int((y_train==1).sum()),
-            }
+                class_names[i]: int((y_train == i).sum()) for i in range(n_classes)
+            },
+            "classes": class_names,
+            "target_index_diabetic": int(diabetic_idx),
         },
         "best": {
             "oof": best["oof"],
@@ -468,13 +619,13 @@ def main(csv_path: str):
             "smote": c["use_smote"],
             "calibration": c["calibration"],
             "auroc_oof": c["oof"]["auroc"],
-            "auroc_ci_low": c["oof"]["auroc_95ci"][0],
-            "auroc_ci_high": c["oof"]["auroc_95ci"][1],
-            "auprc_oof": c["oof"]["auprc"],
+            "auroc_ci_low": (c["oof"]["auroc_95ci"][0] if c["oof"]["auroc_95ci"] else np.nan),
+            "auroc_ci_high": (c["oof"]["auroc_95ci"][1] if c["oof"]["auroc_95ci"] else np.nan),
+            "auprc_diabetic_vs_rest_oof": c["oof"]["auprc_diabetic_vs_rest"],
             "brier_oof": c["oof"]["brier"],
-            "ece_oof": c["oof"]["ece"],
-            "cal_slope": c["oof"]["cal_slope"],
-            "cal_intercept": c["oof"]["cal_intercept"],
+            "ece_diabetic_vs_rest_oof": c["oof"]["ece_diabetic_vs_rest"],
+            "cal_slope_diabetic_vs_rest": c["oof"]["cal_slope_diabetic_vs_rest"],
+            "cal_intercept_diabetic_vs_rest": c["oof"]["cal_intercept_diabetic_vs_rest"],
             "accuracy_oof": c["oof"]["accuracy"],
             "f1_oof": c["oof"]["f1"],
             "log_loss_oof": c["oof"]["log_loss"],
@@ -482,10 +633,10 @@ def main(csv_path: str):
         if c["external_site"]:
             row.update({
                 "ext_site": c["external_site"]["site"],
-                "ext_auroc": c["external_site"]["auroc"],
-                "ext_auprc": c["external_site"]["auprc"],
-                "ext_brier": c["external_site"]["brier"],
-                "ext_ece": c["external_site"]["ece"],
+                "ext_auroc_macro_ovr": c["external_site"]["auroc_macro_ovr"],
+                "ext_auprc_diabetic_vs_rest": c["external_site"]["auprc_diabetic_vs_rest"],
+                "ext_brier_multiclass": c["external_site"]["brier_multiclass"],
+                "ext_ece_diabetic_vs_rest": c["external_site"]["ece_diabetic_vs_rest"],
             })
         rows.append(row)
 
@@ -510,8 +661,9 @@ def main(csv_path: str):
     model_card = {
         "model_name": model_name,
         "model_version": version,
-        "classes": ["not_diabetic", "t2d"],
-            "features": feature_cols,
+        "classes": class_names,
+        "target_index_diabetic": int(diabetic_idx),
+        "features": feature_cols,
         "pipeline": {
             "preprocess": "median impute + scale numeric; most_frequent impute + onehot categorical",
             "imbalance": "SMOTE inside CV" if best["use_smote"] else "class_weight/balanced only",
@@ -523,7 +675,7 @@ def main(csv_path: str):
         "dca": "Saved in performance.json comparisons[*].dca",
         "created_at_utc": dt.datetime.utcnow().isoformat() + "Z",
         "limitations": [
-            "Binary classification only (not_diabetic vs t2d) based on available labels.",
+            "Primary clinical thresholding remains focused on diabetic-vs-rest risk.",
             "Synthetic dataset may not generalize to real clinics; use site-held-out external validation with real data next.",
         ],
         "intended_use": "Screening support (not a diagnosis). Confirm with lab tests.",

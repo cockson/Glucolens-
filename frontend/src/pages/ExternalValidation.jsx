@@ -3,6 +3,9 @@ import { api } from "../lib/api";
 import Locked from "./Locked.jsx";
 import { isLockedError, lockedMessage } from "../lib/errors";
 
+const COUNTRY_RE = /^[A-Z]{2}$/;
+const MAX_CSV_BYTES = 10 * 1024 * 1024;
+
 export default function ExternalValidation(){
   const [datasets,setDatasets]=useState([]);
   const [runs,setRuns]=useState([]);
@@ -33,13 +36,18 @@ export default function ExternalValidation(){
     setErr(""); setBusy(true);
     try{
       if(!file) throw new Error("Select a CSV file");
+      if(!String(file.name || "").toLowerCase().endsWith(".csv")) throw new Error("Only .csv files are allowed.");
+      if (file.size > MAX_CSV_BYTES) throw new Error("CSV file is too large (max 10MB).");
       if(!siteName.trim()) throw new Error("Enter site name");
+      if(siteName.trim().length < 2 || siteName.trim().length > 120) throw new Error("Site name must be 2-120 characters.");
+      if(!COUNTRY_RE.test(country.trim().toUpperCase())) throw new Error("Country must be a 2-letter code (for example, NG).");
+      if(desc.trim().length > 300) throw new Error("Description must be at most 300 characters.");
       const fd = new FormData();
-      fd.append("site_name", siteName);
-      fd.append("country_code", country);
-      fd.append("description", desc);
+      fd.append("site_name", siteName.trim());
+      fd.append("country_code", country.trim().toUpperCase());
+      fd.append("description", desc.trim());
       fd.append("file", file);
-      await api.post("/api/validation/datasets/upload", fd, { headers: { "Content-Type":"multipart/form-data" }});
+      await api.post("/api/validation/datasets/upload", fd);
       setSiteName(""); setDesc(""); setFile(null);
       await refresh();
     }catch(e){
@@ -120,15 +128,19 @@ export default function ExternalValidation(){
         <div className="card" style={{marginTop:12}}>
           <h3 style={{marginTop:0}}>Upload dataset</h3>
           <label className="small">Site name</label>
-          <input className="input" value={siteName} onChange={e=>setSiteName(e.target.value)} placeholder="Clinic X - Lagos" />
+          <input className="input" value={siteName} maxLength={120} onChange={e=>setSiteName(e.target.value)} placeholder="Clinic X - Lagos" />
+          <div className="small">Expected length: 2-120 characters</div>
           <div style={{height:8}} />
           <label className="small">Country</label>
-          <input className="input" value={country} onChange={e=>setCountry(e.target.value.toUpperCase())} />
+          <input className="input" value={country} maxLength={2} onChange={e=>setCountry(e.target.value.toUpperCase())} placeholder="NG" />
+          <div className="small">Expected format: 2-letter ISO code</div>
           <div style={{height:8}} />
           <label className="small">Description</label>
-          <input className="input" value={desc} onChange={e=>setDesc(e.target.value)} placeholder="De-identified external validation cohort" />
+          <input className="input" value={desc} maxLength={300} onChange={e=>setDesc(e.target.value)} placeholder="De-identified external validation cohort" />
+          <div className="small">Max length: 300 characters</div>
           <div style={{height:8}} />
           <input type="file" accept=".csv" onChange={e=>setFile(e.target.files?.[0] || null)} />
+          <div className="small">Only .csv, max 10MB</div>
           <div style={{height:10}} />
           <button className="btn" onClick={upload} disabled={busy}>{busy ? "Working…" : "Upload"}</button>
         </div>

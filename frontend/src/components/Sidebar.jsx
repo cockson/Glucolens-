@@ -6,11 +6,11 @@ const NAV = [
   {
     title: "Screening",
     items: [
-      { to: "/screening/tabular", label: "Tabular" },
-      { to: "/screening/fusion", label: "Fusion" },
-      { to: "/screening/retina", label: "Retina" },
-      { to: "/screening/skin", label: "Skin" },
-      { to: "/screening/genomics", label: "Genomics" },
+      { to: "/screening/fusion", label: "Multi-Mode" },
+      { to: "/screening/tabular", label: "Tabular Mode" },
+      { to: "/screening/retina", label: "Retina Mode" },
+      { to: "/screening/skin", label: "Skin Mode" },
+      { to: "/screening/genomics", label: "Genomic Mode" },
     ],
   },
   {

@@ -56,9 +56,14 @@ async def security_headers(request: Request, call_next):
 
 # --- CORS ---
 origins = [o.strip() for o in settings.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
+allow_origin_regex = None
+if settings.ENV == "dev":
+    # Developer convenience: allow localhost/127.0.0.1 across ports to avoid CORS "Network Error".
+    allow_origin_regex = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],

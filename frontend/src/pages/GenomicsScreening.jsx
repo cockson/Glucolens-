@@ -4,6 +4,8 @@ import { getAuth } from "../lib/authStore";
 import Locked from "./Locked.jsx";
 import { isLockedError, lockedMessage } from "../lib/errors";
 
+const PATIENT_KEY_RE = /^[A-Za-z0-9_-]{3,64}$/;
+
 export default function GenomicsScreening(){
   const auth = getAuth();
   const isPublic = auth?.role === "public";
@@ -27,8 +29,27 @@ export default function GenomicsScreening(){
       setBusy(false);
       return;
     }
+    if (!isPublic && !PATIENT_KEY_RE.test(patientKey.trim())) {
+      setErr("Patient key must be 3-64 chars (letters, numbers, underscore, hyphen).");
+      setBusy(false);
+      return;
+    }
     if (!vectorText.trim() && !rowCsvFile) {
       setErr("Paste feature vector JSON or upload one CSV row.");
+      setBusy(false);
+      return;
+    }
+    if (vectorText.trim()) {
+      try {
+        JSON.parse(vectorText.trim());
+      } catch {
+        setErr("Feature vector JSON is invalid.");
+        setBusy(false);
+        return;
+      }
+    }
+    if (rowCsvFile && !String(rowCsvFile.name || "").toLowerCase().endsWith(".csv")) {
+      setErr("Uploaded row file must be a .csv file.");
       setBusy(false);
       return;
     }
@@ -76,7 +97,8 @@ export default function GenomicsScreening(){
         {!isPublic && (
           <>
             <label className="small">Patient key</label>
-            <input className="input" value={patientKey} onChange={e=>setPatientKey(e.target.value)} placeholder="PAT_001_ABC" />
+            <input className="input" value={patientKey} maxLength={64} onChange={e=>setPatientKey(e.target.value)} placeholder="PAT_001_ABC" />
+            <div className="small">Expected format: 3-64 chars (A-Z, 0-9, _, -)</div>
             <div style={{height:10}} />
           </>
         )}

@@ -15,8 +15,22 @@ export default function RegisterBusiness() {
 
   async function submit(e){
     e.preventDefault(); setErr("");
+    const payload = {
+      ...form,
+      email: form.email.trim().toLowerCase(),
+      country_code: form.country_code.trim().toUpperCase(),
+      site_code: form.site_code.trim().toUpperCase(),
+      org_name: form.org_name.trim(),
+      facility_name: form.facility_name.trim(),
+    };
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) return setErr("Enter a valid business email.");
+    if (!payload.password || payload.password.length < 8) return setErr("Password must be at least 8 characters.");
+    if (!/^[A-Z]{2}$/.test(payload.country_code)) return setErr("Country code must be 2 letters (e.g., NG).");
+    if (!/^[A-Z0-9_-]{3,30}$/.test(payload.site_code)) return setErr("Site code must be 3-30 chars: A-Z, 0-9, _ or -.");
+    if (!payload.org_name) return setErr("Organization name is required.");
+    if (!payload.facility_name) return setErr("Facility name is required.");
     try {
-      await api.post("/api/auth/register-business", form);
+      await api.post("/api/auth/register-business", payload);
       nav("/login");
     } catch (e2) {
       setErr(e2?.response?.data?.detail || "Registration failed");
@@ -31,23 +45,23 @@ export default function RegisterBusiness() {
         <form onSubmit={submit} className="row">
           <div>
             <label className="small">Business Email</label>
-            <input className="input" value={form.email} onChange={e=>set("email", e.target.value)} />
+            <input className="input" type="email" required value={form.email} onChange={e=>set("email", e.target.value)} />
           </div>
           <div>
             <label className="small">Password</label>
-            <input className="input" type="password" value={form.password} onChange={e=>set("password", e.target.value)} />
+            <input className="input" type="password" required minLength={8} value={form.password} onChange={e=>set("password", e.target.value)} />
           </div>
           <div>
             <label className="small">Organization Name</label>
-            <input className="input" value={form.org_name} onChange={e=>set("org_name", e.target.value)} />
+            <input className="input" required value={form.org_name} onChange={e=>set("org_name", e.target.value)} />
           </div>
           <div>
             <label className="small">Country Code</label>
-            <input className="input" value={form.country_code} onChange={e=>set("country_code", e.target.value.toUpperCase())} />
+            <input className="input" required maxLength={2} value={form.country_code} onChange={e=>set("country_code", e.target.value.toUpperCase())} placeholder="NG" />
           </div>
           <div>
             <label className="small">Facility Name</label>
-            <input className="input" value={form.facility_name} onChange={e=>set("facility_name", e.target.value)} />
+            <input className="input" required value={form.facility_name} onChange={e=>set("facility_name", e.target.value)} />
           </div>
           <div>
             <label className="small">Facility Type</label>
@@ -59,7 +73,7 @@ export default function RegisterBusiness() {
           </div>
           <div>
             <label className="small">Site Code</label>
-            <input className="input" value={form.site_code} onChange={e=>set("site_code", e.target.value)} />
+            <input className="input" required minLength={3} maxLength={30} value={form.site_code} onChange={e=>set("site_code", e.target.value.toUpperCase())} />
           </div>
           <div style={{ display:"flex", alignItems:"end", gap:10 }}>
             <button className="btn" type="submit">Create</button>
