@@ -330,7 +330,9 @@ npm run build
 This repo now includes a Render Blueprint file at `render.yaml` that deploys:
 1. `glucolens-backend` (FastAPI web service).
 2. `glucolens-frontend` (static Vite site).
-3. `glucolens-db` (managed PostgreSQL).
+3. `glucolens-worker` (RQ worker process).
+4. `glucolens-redis` (Redis for queue/rate limiting).
+5. `glucolens-db` (managed PostgreSQL).
 
 ### One-click deploy
 1. Push this repository to GitHub.
@@ -343,7 +345,8 @@ This repo now includes a Render Blueprint file at `render.yaml` that deploys:
 ### Important post-deploy checks
 1. Update backend `CORS_ALLOW_ORIGINS` if Render assigned a frontend URL different from `https://glucolens-frontend.onrender.com`.
 2. Set Paystack keys in backend and `VITE_PAYSTACK_PUBLIC_KEY` in frontend if billing is used.
-3. If background queue processing is required, add a Render Worker service for `backend/worker.py` and configure `REDIS_URL`.
+3. Ensure `glucolens-worker` is running and connected to `glucolens-redis`.
+4. Ensure backend `REDIS_URL` is populated from Redis service connection string.
 
 ## Common Training Commands
 Run from `backend/`:
