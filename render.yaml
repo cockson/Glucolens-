@@ -56,7 +56,6 @@ services:
     runtime: static
     name: glucolens-frontend
     rootDir: frontend
-    plan: free
     buildCommand: npm install && npm run build
     staticPublishPath: dist
     autoDeploy: true
