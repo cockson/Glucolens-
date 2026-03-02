@@ -12,6 +12,11 @@ dist/
 .env
 .env.*
 
+# ML artifacts
+backend/artifacts/
+backend/backend/artifacts/
+*.joblib
+
 # OS
 .DS_Store
 Thumbs.db
