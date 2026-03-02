@@ -1,0 +1,45 @@
+{
+  "model_name": "tabular_rf_cal_sigmoid_smote_0",
+  "model_version": "20260225_175331",
+  "classes": [
+    "not_diabetic",
+    "t2d"
+  ],
+  "features": [
+    "age",
+    "sex",
+    "bmi",
+    "waist_circumference",
+    "systolic_bp",
+    "diastolic_bp"
+  ],
+  "pipeline": {
+    "preprocess": "median impute + scale numeric; most_frequent impute + onehot categorical",
+    "imbalance": "class_weight/balanced only",
+    "tuning": "RandomizedSearchCV inner loop (nested CV)",
+    "calibration": "sigmoid"
+  },
+  "metrics_oof": {
+    "auroc": 0.6738797821281373,
+    "auroc_95ci": [
+      0.6519941412340758,
+      0.6957654230221982
+    ],
+    "auprc": 0.4018120830838758,
+    "brier": 0.1780639632166459,
+    "ece": 0.010983660710676937,
+    "cal_slope": 0.9728703151458756,
+    "cal_intercept": -0.0640798360972351,
+    "accuracy": 0.7424666666666667,
+    "f1": 0.16960447119518487,
+    "log_loss": 0.5352669409982341
+  },
+  "external_validation": null,
+  "dca": "Saved in performance.json comparisons[*].dca",
+  "created_at_utc": "2026-02-25T17:54:00.496459Z",
+  "limitations": [
+    "Binary classification only (not_diabetic vs t2d) based on available labels.",
+    "Synthetic dataset may not generalize to real clinics; use site-held-out external validation with real data next."
+  ],
+  "intended_use": "Screening support (not a diagnosis). Confirm with lab tests."
+}

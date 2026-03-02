@@ -13,19 +13,36 @@ from app.ml.retina.gradcam import GradCAM, overlay_cam_on_image
 
 # Resolve paths relative to backend repo root regardless of cwd.
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-ART_DIR = os.path.join(REPO_ROOT, "artifacts", "retina")
-REGISTRY = os.path.join(ART_DIR, "registry.json")
+PROJECT_ROOT = os.path.abspath(os.path.join(REPO_ROOT, ".."))
+ART_CANDIDATES = [
+    os.path.join(REPO_ROOT, "artifacts", "retina"),
+    os.path.join(PROJECT_ROOT, "backend", "artifacts", "retina"),
+]
 
 _cached = {"bundle": None, "model": None, "cam": None, "tfm": None}
 
+def _find_art_dir() -> str:
+    for d in ART_CANDIDATES:
+        if os.path.isfile(os.path.join(d, "registry.json")):
+            return d
+    raise FileNotFoundError(f"retina registry.json not found. Checked: {ART_CANDIDATES}")
+
+def _resolve_model_path(path: str) -> str:
+    if os.path.isabs(path):
+        return path
+    if path == "backend" or path.startswith(f"backend{os.sep}"):
+        return os.path.join(PROJECT_ROOT, path)
+    return os.path.join(REPO_ROOT, path)
+
 def _load_registry():
-    with open(REGISTRY, "r", encoding="utf-8") as f:
+    art = _find_art_dir()
+    with open(os.path.join(art, "registry.json"), "r", encoding="utf-8") as f:
         return json.load(f)["current"]
 
 def get_bundle():
     if _cached["bundle"] is None:
         reg = _load_registry()
-        _cached["bundle"] = load(reg["model_path"])
+        _cached["bundle"] = load(_resolve_model_path(reg["model_path"]))
     return _cached["bundle"]
 
 def get_model():
@@ -112,5 +129,6 @@ def predict_retina(image_bytes: bytes):
     }
 
 def load_model_card():
-    with open(os.path.join(ART_DIR, "modelcard.json"), "r", encoding="utf-8") as f:
+    art = _find_art_dir()
+    with open(os.path.join(art, "modelcard.json"), "r", encoding="utf-8") as f:
         return json.load(f)

@@ -1,0 +1,427 @@
+{
+  "current": {
+    "model_name": "retina_resnet18_tempcal",
+    "model_version": "20260226_203136"
+  },
+  "val": {
+    "n": 229,
+    "positive_rate": 0.8165938864628821,
+    "auroc": 0.9766997708174179,
+    "auroc_delong_95ci": {
+      "auroc": 0.9766997708174179,
+      "ci_low": 0.7147802275925614,
+      "ci_high": 1.0
+    },
+    "auprc": 0.9874999279995179,
+    "brier": 0.012611734680831432,
+    "ece": 0.014410166236608582,
+    "cal_slope": 0.9312547081571426,
+    "cal_intercept": 0.9040846007135827,
+    "accuracy": 0.9868995633187773,
+    "f1": 0.9919571045576407,
+    "log_loss": 0.06990060872594771
+  },
+  "decision_curve": [
+    {
+      "threshold": 0.01,
+      "net_benefit": 0.8157117021745843
+    },
+    {
+      "threshold": 0.02,
+      "net_benefit": 0.8111576508332591
+    },
+    {
+      "threshold": 0.03,
+      "net_benefit": 0.8111466258497276
+    },
+    {
+      "threshold": 0.04,
+      "net_benefit": 0.8111353711790393
+    },
+    {
+      "threshold": 0.05,
+      "net_benefit": 0.8113077453458974
+    },
+    {
+      "threshold": 0.060000000000000005,
+      "net_benefit": 0.8113908761497723
+    },
+    {
+      "threshold": 0.06999999999999999,
+      "net_benefit": 0.8115697046532375
+    },
+    {
+      "threshold": 0.08,
+      "net_benefit": 0.8114676286310993
+    },
+    {
+      "threshold": 0.09,
+      "net_benefit": 0.8113633091799031
+    },
+    {
+      "threshold": 0.09999999999999999,
+      "net_benefit": 0.8112566715186803
+    },
+    {
+      "threshold": 0.11,
+      "net_benefit": 0.8111476375055199
+    },
+    {
+      "threshold": 0.12,
+      "net_benefit": 0.8116315998412068
+    },
+    {
+      "threshold": 0.13,
+      "net_benefit": 0.8115745620639462
+    },
+    {
+      "threshold": 0.14,
+      "net_benefit": 0.8115161978267492
+    },
+    {
+      "threshold": 0.15000000000000002,
+      "net_benefit": 0.811456460313383
+    },
+    {
+      "threshold": 0.16,
+      "net_benefit": 0.8113953004782699
+    },
+    {
+      "threshold": 0.17,
+      "net_benefit": 0.8113326669121903
+    },
+    {
+      "threshold": 0.18000000000000002,
+      "net_benefit": 0.8112685056981574
+    },
+    {
+      "threshold": 0.19,
+      "net_benefit": 0.8112027602566176
+    },
+    {
+      "threshold": 0.2,
+      "net_benefit": 0.8111353711790393
+    },
+    {
+      "threshold": 0.21000000000000002,
+      "net_benefit": 0.811066276048864
+    },
+    {
+      "threshold": 0.22,
+      "net_benefit": 0.8109954092486844
+    },
+    {
+      "threshold": 0.23,
+      "net_benefit": 0.8109227017523961
+    },
+    {
+      "threshold": 0.24000000000000002,
+      "net_benefit": 0.8108480809009423
+    },
+    {
+      "threshold": 0.25,
+      "net_benefit": 0.8107714701601164
+    },
+    {
+      "threshold": 0.26,
+      "net_benefit": 0.8106927888587278
+    },
+    {
+      "threshold": 0.27,
+      "net_benefit": 0.8106119519052462
+    },
+    {
+      "threshold": 0.28,
+      "net_benefit": 0.8105288694808346
+    },
+    {
+      "threshold": 0.29000000000000004,
+      "net_benefit": 0.8104434467064395
+    },
+    {
+      "threshold": 0.3,
+      "net_benefit": 0.8103555832813475
+    },
+    {
+      "threshold": 0.31,
+      "net_benefit": 0.8102651730903108
+    },
+    {
+      "threshold": 0.32,
+      "net_benefit": 0.8101721037760082
+    },
+    {
+      "threshold": 0.33,
+      "net_benefit": 0.8100762562732191
+    },
+    {
+      "threshold": 0.34,
+      "net_benefit": 0.8099775043006484
+    },
+    {
+      "threshold": 0.35000000000000003,
+      "net_benefit": 0.8098757138058448
+    },
+    {
+      "threshold": 0.36000000000000004,
+      "net_benefit": 0.8054039301310043
+    },
+    {
+      "threshold": 0.37,
+      "net_benefit": 0.8052956262563249
+    },
+    {
+      "threshold": 0.38,
+      "net_benefit": 0.8051838287082688
+    },
+    {
+      "threshold": 0.39,
+      "net_benefit": 0.8050683656668337
+    },
+    {
+      "threshold": 0.4,
+      "net_benefit": 0.8049490538573508
+    },
+    {
+      "threshold": 0.41000000000000003,
+      "net_benefit": 0.8048256975797499
+    },
+    {
+      "threshold": 0.42000000000000004,
+      "net_benefit": 0.804698087637404
+    },
+    {
+      "threshold": 0.43,
+      "net_benefit": 0.8045660001532214
+    },
+    {
+      "threshold": 0.44,
+      "net_benefit": 0.8044291952588896
+    },
+    {
+      "threshold": 0.45,
+      "net_benefit": 0.8042874156411274
+    },
+    {
+      "threshold": 0.46,
+      "net_benefit": 0.8041403849264112
+    },
+    {
+      "threshold": 0.47000000000000003,
+      "net_benefit": 0.8039878058828376
+    },
+    {
+      "threshold": 0.48000000000000004,
+      "net_benefit": 0.8038293584145112
+    },
+    {
+      "threshold": 0.49,
+      "net_benefit": 0.803664697319976
+    },
+    {
+      "threshold": 0.5,
+      "net_benefit": 0.8034934497816594
+    },
+    {
+      "threshold": 0.51,
+      "net_benefit": 0.8033152125479013
+    },
+    {
+      "threshold": 0.52,
+      "net_benefit": 0.8031295487627366
+    },
+    {
+      "threshold": 0.53,
+      "net_benefit": 0.802935984390969
+    },
+    {
+      "threshold": 0.54,
+      "net_benefit": 0.8027340041769508
+    },
+    {
+      "threshold": 0.55,
+      "net_benefit": 0.8025230470645318
+    },
+    {
+      "threshold": 0.56,
+      "net_benefit": 0.8023025009924574
+    },
+    {
+      "threshold": 0.5700000000000001,
+      "net_benefit": 0.8020716969635422
+    },
+    {
+      "threshold": 0.5800000000000001,
+      "net_benefit": 0.7974630900395092
+    },
+    {
+      "threshold": 0.59,
+      "net_benefit": 0.7972095004792843
+    },
+    {
+      "threshold": 0.6,
+      "net_benefit": 0.7969432314410481
+    },
+    {
+      "threshold": 0.61,
+      "net_benefit": 0.7966633075803381
+    },
+    {
+      "threshold": 0.62,
+      "net_benefit": 0.7963686508848541
+    },
+    {
+      "threshold": 0.63,
+      "net_benefit": 0.7960580668004249
+    },
+    {
+      "threshold": 0.64,
+      "net_benefit": 0.7913634158175643
+    },
+    {
+      "threshold": 0.65,
+      "net_benefit": 0.7910168434185901
+    },
+    {
+      "threshold": 0.66,
+      "net_benefit": 0.7906498844079116
+    },
+    {
+      "threshold": 0.67,
+      "net_benefit": 0.790260685457192
+    },
+    {
+      "threshold": 0.68,
+      "net_benefit": 0.7898471615720524
+    },
+    {
+      "threshold": 0.6900000000000001,
+      "net_benefit": 0.7894069587265812
+    },
+    {
+      "threshold": 0.7000000000000001,
+      "net_benefit": 0.7889374090247453
+    },
+    {
+      "threshold": 0.7100000000000001,
+      "net_benefit": 0.7884354765848517
+    },
+    {
+      "threshold": 0.72,
+      "net_benefit": 0.7878976918278228
+    },
+    {
+      "threshold": 0.73,
+      "net_benefit": 0.7829532589357917
+    },
+    {
+      "threshold": 0.74,
+      "net_benefit": 0.7823312059119919
+    },
+    {
+      "threshold": 0.75,
+      "net_benefit": 0.7816593886462881
+    },
+    {
+      "threshold": 0.76,
+      "net_benefit": 0.7809315866084424
+    },
+    {
+      "threshold": 0.77,
+      "net_benefit": 0.7801404974368711
+    },
+    {
+      "threshold": 0.78,
+      "net_benefit": 0.779277491067884
+    },
+    {
+      "threshold": 0.79,
+      "net_benefit": 0.7783322936161363
+    },
+    {
+      "threshold": 0.8,
+      "net_benefit": 0.7772925764192139
+    },
+    {
+      "threshold": 0.81,
+      "net_benefit": 0.776143415306826
+    },
+    {
+      "threshold": 0.8200000000000001,
+      "net_benefit": 0.7748665696263949
+    },
+    {
+      "threshold": 0.8300000000000001,
+      "net_benefit": 0.7734395068070896
+    },
+    {
+      "threshold": 0.8400000000000001,
+      "net_benefit": 0.7718340611353711
+    },
+    {
+      "threshold": 0.85,
+      "net_benefit": 0.7700145560407569
+    },
+    {
+      "threshold": 0.86,
+      "net_benefit": 0.767935121646912
+    },
+    {
+      "threshold": 0.87,
+      "net_benefit": 0.7568021498152502
+    },
+    {
+      "threshold": 0.88,
+      "net_benefit": 0.7540029112081513
+    },
+    {
+      "threshold": 0.89,
+      "net_benefit": 0.7506947201270345
+    },
+    {
+      "threshold": 0.9,
+      "net_benefit": 0.7467248908296943
+    },
+    {
+      "threshold": 0.91,
+      "net_benefit": 0.7375060650169821
+    },
+    {
+      "threshold": 0.92,
+      "net_benefit": 0.722707423580786
+    },
+    {
+      "threshold": 0.93,
+      "net_benefit": 0.7149095446038677
+    },
+    {
+      "threshold": 0.9400000000000001,
+      "net_benefit": 0.700145560407569
+    },
+    {
+      "threshold": 0.9500000000000001,
+      "net_benefit": 0.685589519650655
+    },
+    {
+      "threshold": 0.9600000000000001,
+      "net_benefit": 0.6462882096069866
+    },
+    {
+      "threshold": 0.97,
+      "net_benefit": 0.596797671033479
+    },
+    {
+      "threshold": 0.98,
+      "net_benefit": 0.4716157205240177
+    },
+    {
+      "threshold": 0.99,
+      "net_benefit": 0.13100436681222744
+    }
+  ],
+  "created_at_utc": "2026-02-26T20:48:24.384690Z",
+  "notes": [
+    "Validation computed on backend/data/retina/val using current registry model.",
+    "Retina explains via Grad-CAM; use quality gate for clinical intake."
+  ]
+}

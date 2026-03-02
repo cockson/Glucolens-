@@ -1,0 +1,63 @@
+{
+  "model_name": "tabular_rf_cal_sigmoid_smote_1",
+  "model_version": "20260301_042231",
+  "classes": [
+    "non_diabetic",
+    "prediabetic",
+    "diabetic"
+  ],
+  "target_index_diabetic": 2,
+  "features": [
+    "age",
+    "sex",
+    "bmi",
+    "waist_circumference",
+    "systolic_bp",
+    "diastolic_bp",
+    "pulse_pressure",
+    "bmi_category",
+    "central_obesity",
+    "smoking_status",
+    "alcohol_use",
+    "physical_activity",
+    "family_history_diabetes",
+    "family_history_cvd",
+    "hypertension_status",
+    "fasting_glucose_mgdl",
+    "hba1c_pct",
+    "total_cholesterol_mgdl",
+    "hdl_mgdl",
+    "ldl_mgdl",
+    "triglycerides_mgdl",
+    "cvd_risk_10yr_pct",
+    "cvd_risk_category",
+    "on_antihypertensive",
+    "on_statin"
+  ],
+  "pipeline": {
+    "preprocess": "median impute + scale numeric; most_frequent impute + onehot categorical",
+    "imbalance": "SMOTE inside CV",
+    "tuning": "RandomizedSearchCV inner loop (nested CV)",
+    "calibration": "sigmoid"
+  },
+  "metrics_oof": {
+    "auroc": 0.9990548766163342,
+    "auroc_95ci": null,
+    "auprc_diabetic_vs_rest": 0.9989729448730229,
+    "brier": 0.02181935149639948,
+    "ece_diabetic_vs_rest": 0.002340165379964391,
+    "cal_slope_diabetic_vs_rest": 1.1730434151930171,
+    "cal_intercept_diabetic_vs_rest": 0.5299709756738781,
+    "accuracy": 0.98695,
+    "f1": 0.9870089104901459,
+    "log_loss": 0.04662450472922783
+  },
+  "external_validation": null,
+  "dca": "Saved in performance.json comparisons[*].dca",
+  "created_at_utc": "2026-03-01T04:22:34.789665Z",
+  "limitations": [
+    "Primary clinical thresholding remains focused on diabetic-vs-rest risk.",
+    "Synthetic dataset may not generalize to real clinics; use site-held-out external validation with real data next."
+  ],
+  "intended_use": "Screening support (not a diagnosis). Confirm with lab tests."
+}

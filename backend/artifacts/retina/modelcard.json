@@ -1,0 +1,27 @@
+{
+  "model_name": "retina_resnet18_tempcal",
+  "model_version": "20260226_203136",
+  "classes": [
+    "not_diabetic",
+    "t2d"
+  ],
+  "intended_use": "Retina screening support. Not a definitive diabetes diagnosis.",
+  "calibration": {
+    "method": "temperature_scaling",
+    "temperature": 2.290558338165283
+  },
+  "metrics_val": {
+    "auroc": 0.9766997708174179,
+    "brier": 0.012611734680831432,
+    "accuracy": 0.9868995633187773
+  },
+  "data": {
+    "train_dir": "data/retina/train",
+    "val_dir": "data/retina/val"
+  },
+  "created_at_utc": "2026-02-26T20:31:37.177717Z",
+  "limitations": [
+    "Retina model detects retinal patterns correlated with diabetic complications (e.g., DR).",
+    "Use within clinical workflow; confirm with lab tests."
+  ]
+}

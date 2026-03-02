@@ -31,7 +31,10 @@ def _sanitize_json(value):
 
 @router.get("/model-card")
 def retina_model_card(user: User = Depends(get_current_user)):
-    return load_model_card()
+    try:
+        return load_model_card()
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 @router.post("/predict")
 def retina_predict(
@@ -47,7 +50,10 @@ def retina_predict(
         raise HTTPException(status_code=400, detail="Upload an image file")
 
     img_bytes = file.file.read()
-    result = predict_retina(img_bytes)
+    try:
+        result = predict_retina(img_bytes)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=f"retina_model_unavailable: {str(e)}")
 
     rec = PredictionRecord(
         id=_uuid(),

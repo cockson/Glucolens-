@@ -1,0 +1,19 @@
+{
+  "model_name": "skin_resnet18_tempcal",
+  "model_version": "20260228_184142",
+  "classes": [
+    "negative",
+    "positive"
+  ],
+  "intended_use": "Skin screening support (acanthosis nigrican risk proxy). Not a definitive diabetes diagnosis.",
+  "calibration": {
+    "method": "temperature_scaling",
+    "temperature": 1.5642799139022827
+  },
+  "metrics_val": {
+    "auroc": 0.9843529964011892,
+    "brier": 0.05346778780221939,
+    "accuracy": 0.93125
+  },
+  "created_at_utc": "2026-02-28T18:41:42.417932Z"
+}

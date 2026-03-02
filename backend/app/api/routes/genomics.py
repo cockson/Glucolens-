@@ -43,12 +43,18 @@ def _parse_row_csv_bytes(raw: bytes) -> dict:
 
 @router.get("/model-card")
 def genomics_model_card(user: User = Depends(get_current_user)):
-    return load_model_card()
+    try:
+        return load_model_card()
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.get("/performance")
 def genomics_performance(user: User = Depends(get_current_user)):
-    return load_performance()
+    try:
+        return load_performance()
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.post("/predict")
@@ -78,7 +84,10 @@ def genomics_predict(
         row = _parse_row_csv_bytes(row_csv.file.read())
         input_payload = {**row, **input_payload}
 
-    result = predict_genomics(input_payload)
+    try:
+        result = predict_genomics(input_payload)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=f"genomics_model_unavailable: {str(e)}")
     result["model_name"] = "genomics"
     result["model_version"] = "v1"
 

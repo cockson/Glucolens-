@@ -1,0 +1,22 @@
+{
+  "metrics_summary": {
+    "auroc": 1.0,
+    "brier": 0.00030398303461266513,
+    "accuracy": 1.0,
+    "f1": 1.0
+  },
+  "metrics_holdout": {
+    "auroc": 1.0,
+    "brier": 0.00030398303461266513,
+    "accuracy": 1.0,
+    "f1": 1.0
+  },
+  "metrics_train": {
+    "auroc": 1.0,
+    "brier": 0.002219405708341325,
+    "accuracy": 1.0,
+    "f1": 1.0
+  },
+  "calibration": "isotonic",
+  "n_samples": 3002
+}

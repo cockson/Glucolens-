@@ -16,11 +16,17 @@ def _uuid(): return str(uuid.uuid4())
 
 @router.get("/model-card")
 def skin_model_card(user: User = Depends(get_current_user)):
-    return load_model_card()
+    try:
+        return load_model_card()
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 @router.get("/performance")
 def skin_performance(user: User = Depends(get_current_user)):
-    return load_performance()
+    try:
+        return load_performance()
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 @router.post("/predict")
 def skin_predict(
@@ -35,7 +41,10 @@ def skin_predict(
         raise HTTPException(status_code=400, detail="Upload an image file")
 
     img_bytes = file.file.read()
-    result = predict_skin(img_bytes)
+    try:
+        result = predict_skin(img_bytes)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=f"skin_model_unavailable: {str(e)}")
 
     rec = PredictionRecord(
         id=_uuid(),

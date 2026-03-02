@@ -1,0 +1,9 @@
+{
+  "current": {
+    "model_name": "tabular_rf_cal_sigmoid_smote_0",
+    "model_version": "20260225_175331",
+    "model_path": "backend\\artifacts\\tabular\\tabular_rf_cal_sigmoid_smote_0_20260225_175331.joblib",
+    "performance_path": "backend\\artifacts\\tabular\\performance.json",
+    "comparison_csv": "backend\\artifacts\\tabular\\comparison.csv"
+  }
+}

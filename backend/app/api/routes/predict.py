@@ -21,7 +21,10 @@ def _uuid() -> str:
 
 
 def _predict_and_store(payload: dict, db: Session, user: User):
-    result = predict_with_explain(payload)
+    try:
+        result = predict_with_explain(payload)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=f"tabular_model_unavailable: {str(e)}")
 
     rec = PredictionRecord(
         id=_uuid(),

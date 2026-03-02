@@ -26,11 +26,17 @@ def _uuid(): return str(uuid.uuid4())
 
 @router.get("/model-card")
 def fusion_model_card(user: User = Depends(get_current_user)):
-    return load_fusion_model_card()
+    try:
+        return load_fusion_model_card()
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 @router.get("/performance")
 def fusion_performance(user: User = Depends(get_current_user)):
-    return load_fusion_performance()
+    try:
+        return load_fusion_performance()
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 @router.post("/predict")
 def fusion_predict_endpoint(
@@ -133,6 +139,9 @@ def fusion_predict_endpoint(
         db.commit()
     except HTTPException:
         raise
+    except FileNotFoundError as e:
+        db.rollback()
+        raise HTTPException(status_code=503, detail=f"fusion_model_unavailable: {str(e)}")
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"fusion_predict_failed: {type(e).__name__}: {str(e)}")

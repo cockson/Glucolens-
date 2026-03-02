@@ -1,0 +1,113 @@
+{
+  "current": {
+    "model_name": "tabular_rf_cal_sigmoid_smote_1",
+    "model_version": "20260301_042231",
+    "model_path": "C:\\Users\\Administrator\\Desktop\\Glucolens\\backend\\artifacts\\tabular\\tabular_rf_cal_sigmoid_smote_1_20260301_042231.joblib"
+  },
+  "train_summary": {
+    "n_total": 20000,
+    "n_train": 20000,
+    "n_external": 0,
+    "held_out_site": null,
+    "label_counts_train": {
+      "non_diabetic": 6857,
+      "prediabetic": 6700,
+      "diabetic": 6443
+    },
+    "classes": [
+      "non_diabetic",
+      "prediabetic",
+      "diabetic"
+    ],
+    "target_index_diabetic": 2
+  },
+  "best": {
+    "oof": {
+      "auroc": 0.9990548766163342,
+      "auroc_95ci": null,
+      "auprc_diabetic_vs_rest": 0.9989729448730229,
+      "brier": 0.02181935149639948,
+      "ece_diabetic_vs_rest": 0.002340165379964391,
+      "cal_slope_diabetic_vs_rest": 1.1730434151930171,
+      "cal_intercept_diabetic_vs_rest": 0.5299709756738781,
+      "accuracy": 0.98695,
+      "f1": 0.9870089104901459,
+      "log_loss": 0.04662450472922783
+    },
+    "external_site": null,
+    "best_params": {
+      "model__min_samples_split": 2,
+      "model__min_samples_leaf": 1,
+      "model__max_features": "sqrt",
+      "model__max_depth": null
+    },
+    "calibration": "sigmoid",
+    "use_smote": true
+  },
+  "comparisons": [
+    {
+      "name": "rf",
+      "use_smote": true,
+      "calibration": "sigmoid",
+      "auroc": 0.9990548766163342,
+      "auroc_95ci": null,
+      "auprc_diabetic_vs_rest": 0.9989729448730229,
+      "brier": 0.02181935149639948,
+      "ece_diabetic_vs_rest": 0.002340165379964391,
+      "cal_slope_diabetic_vs_rest": 1.1730434151930171,
+      "cal_intercept_diabetic_vs_rest": 0.5299709756738781,
+      "accuracy": 0.98695,
+      "f1": 0.9870089104901459,
+      "log_loss": 0.04662450472922783,
+      "external_site": null
+    },
+    {
+      "name": "rf",
+      "use_smote": false,
+      "calibration": "sigmoid",
+      "auroc": 0.9990526903432145,
+      "auroc_95ci": null,
+      "auprc_diabetic_vs_rest": 0.9989421283286322,
+      "brier": 0.021851905902601707,
+      "ece_diabetic_vs_rest": 0.002640698302720526,
+      "cal_slope_diabetic_vs_rest": 1.1666132574945638,
+      "cal_intercept_diabetic_vs_rest": 0.5107617921678902,
+      "accuracy": 0.98685,
+      "f1": 0.9869107681917001,
+      "log_loss": 0.04705360236386355,
+      "external_site": null
+    },
+    {
+      "name": "logreg",
+      "use_smote": true,
+      "calibration": "sigmoid",
+      "auroc": 0.9924605788302069,
+      "auroc_95ci": null,
+      "auprc_diabetic_vs_rest": 0.9891417888473164,
+      "brier": 0.1529087325510685,
+      "ece_diabetic_vs_rest": 0.08770152843899685,
+      "cal_slope_diabetic_vs_rest": 1.9505747065491268,
+      "cal_intercept_diabetic_vs_rest": 0.6524449673909418,
+      "accuracy": 0.95425,
+      "f1": 0.9543473228151654,
+      "log_loss": 0.32272289066718685,
+      "external_site": null
+    },
+    {
+      "name": "logreg",
+      "use_smote": false,
+      "calibration": "sigmoid",
+      "auroc": 0.9924331312134034,
+      "auroc_95ci": null,
+      "auprc_diabetic_vs_rest": 0.989193227814631,
+      "brier": 0.15306647010937638,
+      "ece_diabetic_vs_rest": 0.0877910247197764,
+      "cal_slope_diabetic_vs_rest": 1.9528358833376518,
+      "cal_intercept_diabetic_vs_rest": 0.654041718865579,
+      "accuracy": 0.95405,
+      "f1": 0.9541527221193657,
+      "log_loss": 0.3228422172393927,
+      "external_site": null
+    }
+  ]
+}

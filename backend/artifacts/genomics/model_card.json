@@ -1,0 +1,28 @@
+{
+  "model_name": "genomics_logreg",
+  "model_version": "20260301_044358",
+  "task": "binary classification",
+  "target": "diabetes_proxy_positive",
+  "features": [
+    "TCF7L2_rs7903146",
+    "KCNQ1_rs2237892",
+    "MTNR1B_rs10830963",
+    "SLC30A8_rs13266634",
+    "PPARG_rs1801282",
+    "Age",
+    "BMI",
+    "HbA1c"
+  ],
+  "calibration": "isotonic",
+  "training": {
+    "n_samples": 1000,
+    "positive_rate": 0.974,
+    "cv_outer_splits": 5
+  },
+  "metrics_oof": {
+    "auc": 0.9992102353498657,
+    "brier": 0.003825111108039679,
+    "n_samples": 1000,
+    "positive_rate": 0.974
+  }
+}

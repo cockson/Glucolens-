@@ -5,13 +5,22 @@ from joblib import load
 # Resolve paths relative to backend repo root regardless of cwd.
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 PROJECT_ROOT = os.path.abspath(os.path.join(REPO_ROOT, ".."))
-FUSION_DIR = os.path.join(REPO_ROOT, "artifacts", "fusion")
-REGISTRY = os.path.join(FUSION_DIR,"registry.json")
+FUSION_CANDIDATES = [
+    os.path.join(REPO_ROOT, "artifacts", "fusion"),
+    os.path.join(PROJECT_ROOT, "backend", "artifacts", "fusion"),
+]
 
 _cached = {"bundle": None}
 
+def _find_fusion_dir() -> str:
+    for d in FUSION_CANDIDATES:
+        if os.path.isfile(os.path.join(d, "registry.json")):
+            return d
+    raise FileNotFoundError(f"fusion registry.json not found. Checked: {FUSION_CANDIDATES}")
+
 def _load_registry():
-    with open(REGISTRY,"r",encoding="utf-8") as f:
+    fusion_dir = _find_fusion_dir()
+    with open(os.path.join(fusion_dir, "registry.json"), "r", encoding="utf-8") as f:
         return json.load(f)["current"]
 
 def _resolve_model_path(path: str) -> str:
@@ -51,7 +60,8 @@ def load_model_card():
     }
 
 def load_performance():
-    perf_path = os.path.join(FUSION_DIR, "performance.json")
+    fusion_dir = _find_fusion_dir()
+    perf_path = os.path.join(fusion_dir, "performance.json")
     if not os.path.isfile(perf_path):
         return {"performance": None}
     with open(perf_path, "r", encoding="utf-8") as f:
