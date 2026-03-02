@@ -31,7 +31,7 @@ export default function Navbar(){
           <Link to="/referrals">Referrals</Link>
           <Link to="/outcomes">Outcomes</Link>
           <Link to="/monitoring">Monitoring</Link>
-        </div>
+        </div> 
         <div className="topbar-right">
           <Link className="btn secondary" to="/billing">Billing</Link>
           <button className="btn secondary" onClick={logout}>Logout</button>
