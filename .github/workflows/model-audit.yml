@@ -1,0 +1,44 @@
+name: Model Audit
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  tabular-strict-audit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install audit dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-audit.txt
+
+      - name: Run strict tabular audit
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m app.ml.tabular.audit_strict \
+            --csv data/anthropometric_data/train_tabular.csv \
+            --output-dir artifacts/audit/tabular \
+            --strict
+
+      - name: Upload audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabular-audit-artifacts
+          path: |
+            backend/artifacts/audit/tabular/audit_report.json
+            backend/artifacts/audit/tabular/calibration_oof.png

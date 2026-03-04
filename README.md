@@ -357,6 +357,22 @@ python -m app.ml.fusion.export_fusion_train
 python -m app.ml.fusion.train_fusion
 ```
 
+## Strict Model Audit
+Run from `backend/`:
+```bash
+python -m app.ml.tabular.audit_strict --csv data/anthropometric_data/train_tabular.csv --output-dir artifacts/audit/tabular --strict
+```
+
+Audit includes:
+1. Leakage checks (keyword scan + perfect-predictor bins + duplicate conflicts)
+2. Label-shuffle sanity AUROC test
+3. Group-split validation (site/patient when columns exist)
+4. Calibration plot export
+
+CI wiring:
+1. GitHub Actions workflow `.github/workflows/model-audit.yml` runs this strict audit on PRs and `main`.
+2. Audit report and calibration plot are uploaded as build artifacts.
+
 ## Current Artifact Snapshot Metrics
 From current artifact JSON files:
 1. Tabular OOF AUROC: `0.9991`
