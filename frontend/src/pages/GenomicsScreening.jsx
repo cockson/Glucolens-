@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { api } from "../lib/api";
+import { api, SCREENING_TIMEOUT_MS } from "../lib/api";
 import { getAuth } from "../lib/authStore";
 import Locked from "./Locked.jsx";
 import { isLockedError, lockedMessage } from "../lib/errors";
@@ -68,6 +68,7 @@ export default function GenomicsScreening(){
 
       const r = await api.post("/api/genomics/predict", fd, {
         headers: { "Content-Type": "multipart/form-data" },
+        timeout: SCREENING_TIMEOUT_MS,
       });
       setResult(r.data);
       setPredId(r.data.prediction_id);

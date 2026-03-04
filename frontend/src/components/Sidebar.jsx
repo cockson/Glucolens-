@@ -1,6 +1,9 @@
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { clearAuth, getAuth } from "../lib/authStore";
+import { getTheme, toggleTheme } from "../lib/theme";
+
+const CLINICIAN_ROLES = new Set(["clinician", "facility_admin", "org_admin", "super_admin"]);
 
 const NAV = [
   {
@@ -46,6 +49,8 @@ export default function Sidebar(){
   const nav = useNavigate();
   const loc = useLocation();
   const auth = getAuth();
+  const isClinician = CLINICIAN_ROLES.has(auth?.role);
+  const [theme, setTheme] = useState(getTheme());
   const [hidden, setHidden] = useState(false);
 
   if (!auth?.access_token) return null;
@@ -60,6 +65,19 @@ export default function Sidebar(){
     return loc.pathname === path || loc.pathname.startsWith(path + "/");
   }
 
+  function onToggleTheme() {
+    setTheme(toggleTheme());
+  }
+
+  const publicNav = [
+    {
+      title: "Screening",
+      items: [{ to: "/screening/fusion", label: "Fusion Screening" }],
+    },
+  ];
+
+  const navSections = isClinician ? NAV : publicNav;
+
   return (
     <>
       {hidden && (
@@ -69,13 +87,23 @@ export default function Sidebar(){
       )}
       <aside className={`sidebar ${hidden ? "hidden" : ""}`}>
       <div className="sidebar-top">
-        <div className="brand-badge">GL</div>
-        {!hidden && (
-          <div>
+        <div className="brand-stack">
+          <div className="brand-mark" aria-hidden="true">
+            <div className="brand-logo-track">
+              <div className="brand-logo-sweep">
+                <div className="brand-logo-lens">
+                  <div className="brand-logo-handle" />
+                </div>
+              </div>
+            </div>
+          </div>
+          {!hidden && (
+            <div>
             <div className="brand">GlucoLens</div>
             <div className="sidebar-subtitle">Clinical ML Console</div>
-          </div>
-        )}
+            </div>
+          )}
+        </div>
         <button className="collapse-btn" onClick={()=>setHidden(true)} aria-label="Hide sidebar">x</button>
       </div>
 
@@ -85,7 +113,7 @@ export default function Sidebar(){
       </div>
 
       <nav className="sidebar-nav">
-        {NAV.map(section => (
+        {navSections.map(section => (
           <div className="sidebar-group" key={section.title}>
             {!hidden && <div className="sidebar-group-title">{section.title}</div>}
             <div className="sidebar-group-links">
@@ -104,7 +132,14 @@ export default function Sidebar(){
       </nav>
 
       <div className="sidebar-footer">
-        <Link className="btn secondary" to="/billing">Billing</Link>
+        {isClinician ? (
+          <Link className="btn secondary" to="/billing">Billing</Link>
+        ) : (
+          <Link className="btn" to="/register-business">Upgrade</Link>
+        )}
+        <button className="btn secondary" onClick={onToggleTheme}>
+          {theme === "dark" ? "Light mode" : "Dark mode"}
+        </button>
         <button className="btn secondary" onClick={logout}>Logout</button>
       </div>
       </aside>

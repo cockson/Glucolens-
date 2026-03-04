@@ -96,11 +96,44 @@ def predict_genomics(payload: dict):
     bundle = get_model()
     features = bundle.get("features") or []
     X = prepare_genomics(pd.DataFrame([payload]))
-    if features:
-        X = X.reindex(columns=features, fill_value=0.0)
 
     estimator = bundle["estimator"]
-    proba = estimator.predict_proba(X)[:, 1][0]
+    # Be tolerant to legacy artifacts that may store feature names as ints
+    # while JSON payload keys are strings (or vice versa).
+    proba = None
+    last_err = None
+    candidate_frames = []
+
+    if features:
+        candidate_frames.append(X.reindex(columns=features, fill_value=0.0))
+
+        features_str = [str(f) for f in features]
+        candidate_frames.append(X.reindex(columns=features_str, fill_value=0.0))
+
+        numeric_cols = []
+        for f in features:
+            fs = str(f).strip()
+            if fs.isdigit():
+                numeric_cols.append(int(fs))
+            else:
+                numeric_cols.append(f)
+        candidate_frames.append(X.reindex(columns=numeric_cols, fill_value=0.0))
+    else:
+        candidate_frames.append(X)
+        candidate_frames.append(X.rename(columns=lambda c: str(c)))
+        candidate_frames.append(X.rename(columns=lambda c: int(c) if str(c).isdigit() else c))
+
+    for xf in candidate_frames:
+        try:
+            proba = float(estimator.predict_proba(xf)[:, 1][0])
+            X = xf
+            break
+        except Exception as e:
+            last_err = e
+            continue
+
+    if proba is None:
+        raise last_err if last_err else RuntimeError("genomics_predict_failed")
 
     explain = {"top_coefficients": []}
     coefs = _extract_coefficients(estimator)
@@ -119,7 +152,7 @@ def predict_genomics(payload: dict):
 
     return {
         "model": "genomics",
-        "probability": float(proba),
-        "predicted_label": "positive" if float(proba) >= 0.5 else "negative",
+        "probability": proba,
+        "predicted_label": "positive" if proba >= 0.5 else "negative",
         "explainability": explain,
     }

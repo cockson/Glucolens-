@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { api } from "../lib/api";
+import { api, SCREENING_TIMEOUT_MS } from "../lib/api";
 import { getAuth } from "../lib/authStore";
 import ConsentCard from "../components/ConsentCard.jsx";
 import Locked from "./Locked.jsx";
@@ -37,6 +37,7 @@ export default function TabularScreening() {
   const [err, setErr] = useState("");
   const [locked, setLocked] = useState(null);
   const [busy, setBusy] = useState(false);
+  const tabularPredictPath = isPublic ? "/api/predict/tabular/public" : "/api/predict/tabular";
 
   const labelText = (label) => {
     if (label === "diabetic" || label === "t2d") return "Diabetic";
@@ -91,7 +92,7 @@ export default function TabularScreening() {
 
     setBusy(true);
     try {
-      const res = await api.post("/api/predict/tabular", payload);
+      const res = await api.post(tabularPredictPath, payload, { timeout: SCREENING_TIMEOUT_MS });
       setResult(res.data);
       setPredictionId(res.data.prediction_id);
     } catch (e) {
@@ -141,7 +142,7 @@ export default function TabularScreening() {
       let okCount = 0;
       for (const item of q) {
         if (item.kind !== "tabular_predict") continue;
-        await api.post("/api/predict/tabular", item.payload);
+        await api.post(tabularPredictPath, item.payload, { timeout: SCREENING_TIMEOUT_MS });
         okCount += 1;
       }
       clearQueue();

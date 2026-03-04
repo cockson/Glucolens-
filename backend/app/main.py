@@ -14,7 +14,7 @@ import redis.asyncio as redis
 from fastapi_limiter import FastAPILimiter
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.api.routes import retina
-
+# from app.gpt.router import router as gpt_router
 
 
 # Optional: rate limiting (only enable if limiter exists)
@@ -102,3 +102,4 @@ app.include_router(fusion.router, prefix="/api/fusion", tags=["fusion"])
 app.include_router(thresholds.router, prefix="/api/thresholds", tags=["thresholds"])
 app.include_router(skin.router, prefix="/api/skin", tags=["skin"])
 app.include_router(genomics.router, prefix="/api/genomics", tags=["genomics"])
+# app.include_router(gpt_router)

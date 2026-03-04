@@ -2,10 +2,23 @@ import axios from "axios";
 
 const rawApiUrl = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const API_URL = rawApiUrl.replace(/\/+$/, "");
+const DEFAULT_TIMEOUT_MS = 30000;
+const DEFAULT_SCREENING_TIMEOUT_MS = 180000;
+
+function parseTimeout(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+export const API_TIMEOUT_MS = parseTimeout(import.meta.env.VITE_API_TIMEOUT_MS, DEFAULT_TIMEOUT_MS);
+export const SCREENING_TIMEOUT_MS = parseTimeout(
+  import.meta.env.VITE_SCREENING_TIMEOUT_MS,
+  DEFAULT_SCREENING_TIMEOUT_MS
+);
 
 export const api = axios.create({
   baseURL: API_URL,
-  timeout: 30000,
+  timeout: API_TIMEOUT_MS,
 });
 
 if (!import.meta.env.VITE_API_URL) {

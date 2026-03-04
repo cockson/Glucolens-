@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { api } from "../lib/api";
+import { api, SCREENING_TIMEOUT_MS } from "../lib/api";
 import Locked from "./Locked.jsx";
 import { isLockedError, lockedMessage } from "../lib/errors";
 
@@ -27,7 +27,10 @@ export default function SkinScreening(){
     try{
       const fd = new FormData();
       fd.append("file", file);
-      const r = await api.post("/api/skin/predict", fd, { headers:{ "Content-Type":"multipart/form-data" }});
+      const r = await api.post("/api/skin/predict", fd, {
+        headers:{ "Content-Type":"multipart/form-data" },
+        timeout: SCREENING_TIMEOUT_MS,
+      });
       setResult(r.data);
       setPredId(r.data.prediction_id);
     }catch(e){

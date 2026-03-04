@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { getAuth, setAuth } from "../lib/authStore";
 import { setAuthHeader } from "../lib/api";
+import { applyTheme } from "../lib/theme";
 import Sidebar from "../components/Sidebar.jsx";
 import CreateReferral from "./CreateReferral.jsx";
 import RecordOutcome from "./RecordOutcome.jsx";
@@ -29,8 +30,7 @@ import SkinScreening from "./SkinScreening.jsx";
 import SkinInsights from "./SkinInsights.jsx";
 import GenomicsScreening from "./GenomicsScreening.jsx";
 import GenomicsInsights from "./GenomicsInsights.jsx";
-
-
+const CLINICIAN_ROLES = new Set(["clinician", "facility_admin", "org_admin", "super_admin"]);
 
 function Protected({ children }) {
   const auth = getAuth();
@@ -38,10 +38,25 @@ function Protected({ children }) {
   return children;
 }
 
+function ClinicianOnly({ children }) {
+  const auth = getAuth();
+  if (!auth?.access_token) return <Navigate to="/login" replace />;
+  if (!CLINICIAN_ROLES.has(auth?.role)) return <Navigate to="/screening/fusion" replace />;
+  return children;
+}
+
+function HomeRedirect() {
+  const auth = getAuth();
+  if (!auth?.access_token) return <Navigate to="/login" replace />;
+  if (auth?.role === "public") return <Navigate to="/screening/fusion" replace />;
+  return <Navigate to="/dashboard" replace />;
+}
+
 export default function App() {
   useEffect(() => {
     const auth = getAuth();
     if (auth?.access_token) setAuthHeader(auth.access_token);
+    applyTheme();
   }, []);
 
   return (
@@ -50,34 +65,34 @@ export default function App() {
         <Sidebar />
         <div className="app-content">
           <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/" element={<HomeRedirect />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register-business" element={<RegisterBusiness />} />
             <Route path="/register-public" element={<RegisterPublic />} />
-            <Route path="/referrals/new" element={<Protected><CreateReferral /></Protected>} />
-            <Route path="/outcomes/new" element={<Protected><RecordOutcome /></Protected>} />
-            <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
-            <Route path="/billing" element={<Protected><Billing /></Protected>} />
-            <Route path="/billing/callback" element={<Protected><BillingCallback /></Protected>} />
-            <Route path="/referrals" element={<Protected><ReferralsList /></Protected>} />
-            <Route path="/outcomes" element={<Protected><OutcomesList /></Protected>} />
-            <Route path="/facilities" element={<Facilities />} />
-            <Route path="/referral/:id" element={<Protected><ReferralView /></Protected>} />
-            <Route path="/models/tabular" element={<Protected><TabularInsights /></Protected>} />
-            <Route path="/screening/tabular" element={<Protected><TabularScreening /></Protected>} />
-            <Route path="/quick-check" element={<Protected><PublicQuickCheck /></Protected>} />
-            <Route path="/monitoring" element={<Protected><Monitoring /></Protected>} />
+            <Route path="/referrals/new" element={<ClinicianOnly><CreateReferral /></ClinicianOnly>} />
+            <Route path="/outcomes/new" element={<ClinicianOnly><RecordOutcome /></ClinicianOnly>} />
+            <Route path="/dashboard" element={<ClinicianOnly><Dashboard /></ClinicianOnly>} />
+            <Route path="/billing" element={<ClinicianOnly><Billing /></ClinicianOnly>} />
+            <Route path="/billing/callback" element={<ClinicianOnly><BillingCallback /></ClinicianOnly>} />
+            <Route path="/referrals" element={<ClinicianOnly><ReferralsList /></ClinicianOnly>} />
+            <Route path="/outcomes" element={<ClinicianOnly><OutcomesList /></ClinicianOnly>} />
+            <Route path="/facilities" element={<ClinicianOnly><Facilities /></ClinicianOnly>} />
+            <Route path="/referral/:id" element={<ClinicianOnly><ReferralView /></ClinicianOnly>} />
+            <Route path="/models/tabular" element={<ClinicianOnly><TabularInsights /></ClinicianOnly>} />
+            <Route path="/screening/tabular" element={<ClinicianOnly><TabularScreening /></ClinicianOnly>} />
+            <Route path="/quick-check" element={<ClinicianOnly><PublicQuickCheck /></ClinicianOnly>} />
+            <Route path="/monitoring" element={<ClinicianOnly><Monitoring /></ClinicianOnly>} />
             <Route path="*" element={<Navigate to="/" replace />} />
-            <Route path="/validation" element={<Protected><ExternalValidation /></Protected>} />
-            <Route path="/screening/retina" element={<Protected><RetinaScreening /></Protected>} />
-            <Route path="/models/retina" element={<Protected><RetinaInsights /></Protected>} />
-            <Route path="/models/skin" element={<Protected><SkinInsights /></Protected>} />
-            <Route path="/models/fusion" element={<Protected><FusionInsights /></Protected>} />
+            <Route path="/validation" element={<ClinicianOnly><ExternalValidation /></ClinicianOnly>} />
+            <Route path="/screening/retina" element={<ClinicianOnly><RetinaScreening /></ClinicianOnly>} />
+            <Route path="/models/retina" element={<ClinicianOnly><RetinaInsights /></ClinicianOnly>} />
+            <Route path="/models/skin" element={<ClinicianOnly><SkinInsights /></ClinicianOnly>} />
+            <Route path="/models/fusion" element={<ClinicianOnly><FusionInsights /></ClinicianOnly>} />
             <Route path="/screening/fusion" element={<Protected><FusionScreening /></Protected>} />
-            <Route path="/governance/thresholds" element={<Protected><ThresholdGovernance /></Protected>} />
-            <Route path="/screening/skin" element={<Protected><SkinScreening /></Protected>} />
-            <Route path="/screening/genomics" element={<Protected><GenomicsScreening /></Protected>} />
-            <Route path="/models/genomics" element={<Protected><GenomicsInsights /></Protected>} />
+            <Route path="/governance/thresholds" element={<ClinicianOnly><ThresholdGovernance /></ClinicianOnly>} />
+            <Route path="/screening/skin" element={<ClinicianOnly><SkinScreening /></ClinicianOnly>} />
+            <Route path="/screening/genomics" element={<ClinicianOnly><GenomicsScreening /></ClinicianOnly>} />
+            <Route path="/models/genomics" element={<ClinicianOnly><GenomicsInsights /></ClinicianOnly>} />
           </Routes>
         </div>
       </div>

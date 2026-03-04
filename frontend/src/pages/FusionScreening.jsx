@@ -1,8 +1,9 @@
 ﻿import React, { useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, SCREENING_TIMEOUT_MS } from "../lib/api";
 import { getAuth } from "../lib/authStore";
 import Locked from "./Locked.jsx";
 import { isLockedError, lockedMessage } from "../lib/errors";
+import { Link } from "react-router-dom";
 
 const COUNTRY_RE = /^[A-Z]{2}$/;
 const PATIENT_KEY_RE = /^[A-Za-z0-9_-]{3,64}$/;
@@ -50,6 +51,7 @@ export default function FusionScreening(){
   const [result, setResult] = useState(null);
   const [predId, setPredId] = useState(null);
   const [err, setErr] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [busy, setBusy] = useState(false);
   const [locked, setLocked] = useState(null);
 
@@ -78,8 +80,22 @@ export default function FusionScreening(){
     return { min: undefined, max: undefined, step: 0.01, hint: "Expected range: numeric value" };
   }
 
-  function set(k, v){ setForm((p) => ({ ...p, [k]: v })); }
-  function setGeno(k, v){ setGenomicsForm((p) => ({ ...p, [k]: v })); }
+  function clearFieldError(key){
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }
+  function set(k, v){
+    setForm((p) => ({ ...p, [k]: v }));
+    clearFieldError(k);
+  }
+  function setGeno(k, v){
+    setGenomicsForm((p) => ({ ...p, [k]: v }));
+    clearFieldError(`genomics.${k}`);
+  }
   function checkRange(name, value, min, max){
     if (value === "" || value === null || value === undefined) return null;
     const n = Number(value);
@@ -141,47 +157,43 @@ export default function FusionScreening(){
 
   async function run(){
     setErr("");
+    setFieldErrors({});
     setBusy(true);
 
-    if (!isPublic && patientKey.trim().length === 0) {
-      setErr("Patient key is required for clinical tracking.");
-      setBusy(false);
-      return;
-    }
+    const nextErrors = {};
+
+    if (!isPublic && patientKey.trim().length === 0) nextErrors.patientKey = "Patient key is required for clinical tracking.";
     if (!COUNTRY_RE.test(country.trim().toUpperCase())) {
-      setErr("Country must be a 2-letter code (for example, NG).");
-      setBusy(false);
-      return;
+      nextErrors.country = "Country must be a 2-letter code (for example, NG).";
     }
     if (!isPublic && !PATIENT_KEY_RE.test(patientKey.trim())) {
-      setErr("Patient key must be 3-64 chars (letters, numbers, underscore, hyphen).");
-      setBusy(false);
-      return;
+      nextErrors.patientKey = "Patient key must be 3-64 chars (letters, numbers, underscore, hyphen).";
     }
     const tabularChecks = [
-      checkRange("Age", form.age, 0, 120),
-      checkRange("BMI", form.bmi, 10, 80),
-      checkRange("Waist circumference", form.waist_circumference, 40, 220),
-      checkRange("Systolic BP", form.systolic_bp, 70, 260),
-      checkRange("Diastolic BP", form.diastolic_bp, 40, 160),
-      checkRange("Fasting glucose", form.fasting_glucose_mgdl, 40, 500),
-      checkRange("HbA1c", form.hba1c_pct, 3, 20),
-    ].filter(Boolean);
-    if (tabularChecks.length) {
-      setErr(tabularChecks[0]);
-      setBusy(false);
-      return;
-    }
+      ["age", checkRange("Age", form.age, 0, 120)],
+      ["bmi", checkRange("BMI", form.bmi, 10, 80)],
+      ["waist_circumference", checkRange("Waist circumference", form.waist_circumference, 40, 220)],
+      ["systolic_bp", checkRange("Systolic BP", form.systolic_bp, 70, 260)],
+      ["diastolic_bp", checkRange("Diastolic BP", form.diastolic_bp, 40, 160)],
+      ["fasting_glucose_mgdl", checkRange("Fasting glucose", form.fasting_glucose_mgdl, 40, 500)],
+      ["hba1c_pct", checkRange("HbA1c", form.hba1c_pct, 3, 20)],
+    ];
+    tabularChecks.forEach(([k, msg]) => {
+      if (msg) nextErrors[k] = msg;
+    });
     if (retinaFile) {
-      if (!String(retinaFile.type || "").startsWith("image/")) { setErr("Retina file must be an image."); setBusy(false); return; }
-      if (retinaFile.size > MAX_IMAGE_BYTES) { setErr("Retina image is too large (max 10MB)."); setBusy(false); return; }
+      if (!String(retinaFile.type || "").startsWith("image/")) nextErrors.retina = "Retina file must be an image.";
+      if (retinaFile.size > MAX_IMAGE_BYTES) nextErrors.retina = "Retina image is too large (max 10MB).";
     }
     if (skinFile) {
-      if (!String(skinFile.type || "").startsWith("image/")) { setErr("Skin file must be an image."); setBusy(false); return; }
-      if (skinFile.size > MAX_IMAGE_BYTES) { setErr("Skin image is too large (max 10MB)."); setBusy(false); return; }
+      if (!String(skinFile.type || "").startsWith("image/")) nextErrors.skin = "Skin file must be an image.";
+      if (skinFile.size > MAX_IMAGE_BYTES) nextErrors.skin = "Skin image is too large (max 10MB).";
     }
     if (genomicsFile && !String(genomicsFile.name || "").toLowerCase().endsWith(".csv")) {
-      setErr("Genomics upload must be a .csv file.");
+      nextErrors.genomicsFile = "Genomics upload must be a .csv file.";
+    }
+    if (Object.keys(nextErrors).length) {
+      setFieldErrors(nextErrors);
       setBusy(false);
       return;
     }
@@ -193,21 +205,27 @@ export default function FusionScreening(){
           const csvObj = parseGenomicsCsv(await genomicsFile.text());
           genomics = { ...genomics, ...csvObj };
         } catch (e) {
-          setErr(e?.message || "Invalid genomics CSV.");
+          setFieldErrors({ genomicsFile: e?.message || "Invalid genomics CSV." });
           setBusy(false);
           return;
         }
       }
 
+      const genomicsErrors = {};
       genomicsFeatures.forEach((k) => {
         const raw = (genomicsForm[k] ?? "").toString().trim();
         if (!raw) return;
         const n = Number(raw);
         const spec = genomicsSpec(k);
-        if (Number.isFinite(n) && spec.min !== undefined && n < spec.min) throw new Error(`${k} must be >= ${spec.min}.`);
-        if (Number.isFinite(n) && spec.max !== undefined && n > spec.max) throw new Error(`${k} must be <= ${spec.max}.`);
+        if (Number.isFinite(n) && spec.min !== undefined && n < spec.min) genomicsErrors[`genomics.${k}`] = `${k} must be >= ${spec.min}.`;
+        if (Number.isFinite(n) && spec.max !== undefined && n > spec.max) genomicsErrors[`genomics.${k}`] = `${k} must be <= ${spec.max}.`;
         genomics[k] = Number.isNaN(n) ? raw : n;
       });
+      if (Object.keys(genomicsErrors).length) {
+        setFieldErrors(genomicsErrors);
+        setBusy(false);
+        return;
+      }
       if (!Object.keys(genomics).length) genomics = null;
 
       const payloadObj = {
@@ -222,7 +240,7 @@ export default function FusionScreening(){
       if (retinaFile) fd.append("retina", retinaFile);
       if (skinFile) fd.append("skin", skinFile);
 
-      const r = await api.post("/api/fusion/predict", fd);
+      const r = await api.post("/api/fusion/predict", fd, { timeout: SCREENING_TIMEOUT_MS });
       setResult(r.data);
       setPredId(r.data.prediction_id);
     } catch (e) {
@@ -267,7 +285,13 @@ export default function FusionScreening(){
     <div className="container">
       <div className="card">
         <h2>Fusion Screening</h2>
-        <p className="small">Each modality is in its own card, dashboard-style, with the same glassmorphic card design.</p>
+        <p className="small">Complete tabular data and optionally add retina, skin, and genomics inputs for multimodal screening.</p>
+        {isPublic && (
+          <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <span className="small">Public access includes Fusion screening. Upgrade for full clinician workspace.</span>
+            <Link className="btn secondary" to="/register-business">Upgrade</Link>
+          </div>
+        )}
       </div>
 
       <div style={{ height: 16 }} />
@@ -276,14 +300,14 @@ export default function FusionScreening(){
         <div className="card">
           <h3 style={{ marginTop:0 }}>Tabular Mode</h3>
           <label className="small">Country</label>
-          <input className="input" value={country} maxLength={2} onChange={e=>setCountry(e.target.value.toUpperCase())} placeholder="NG" />
-          <div className="small">Expected format: 2-letter ISO code</div>
+          <input className={`input ${fieldErrors.country ? "input-error" : ""}`} value={country} maxLength={2} onChange={e=>{ setCountry(e.target.value.toUpperCase()); clearFieldError("country"); }} placeholder="2-letter country code (e.g., NG)" />
+          {fieldErrors.country && <div className="field-error">{fieldErrors.country}</div>}
 
           {!isPublic && (
             <>
               <label className="small">Patient key</label>
-              <input className="input" value={patientKey} maxLength={64} onChange={e=>setPatientKey(e.target.value)} placeholder="PAT_001_ABC" />
-              <div className="small">Expected format: 3-64 chars (A-Z, 0-9, _, -)</div>
+              <input className={`input ${fieldErrors.patientKey ? "input-error" : ""}`} value={patientKey} maxLength={64} onChange={e=>{ setPatientKey(e.target.value); clearFieldError("patientKey"); }} placeholder="3-64 chars (letters, numbers, underscore, hyphen)" />
+              {fieldErrors.patientKey && <div className="field-error">{fieldErrors.patientKey}</div>}
               <div style={{height:10}} />
             </>
           )}
@@ -291,8 +315,8 @@ export default function FusionScreening(){
           <div className="row" style={{marginTop:10}}>
             <div>
               <label className="small">Age</label>
-              <input className="input" type="number" min="0" max="120" step="1" inputMode="numeric" value={form.age} onChange={e=>set("age",e.target.value)} placeholder="45 (0-120)" />
-              <div className="small">Expected range: 0-120 years</div>
+              <input className={`input ${fieldErrors.age ? "input-error" : ""}`} type="number" min="0" max="120" step="1" inputMode="numeric" value={form.age} onChange={e=>set("age",e.target.value)} placeholder="Age in years (0-120)" />
+              {fieldErrors.age && <div className="field-error">{fieldErrors.age}</div>}
             </div>
             <div>
               <label className="small">Sex</label>
@@ -305,8 +329,8 @@ export default function FusionScreening(){
           <div className="row" style={{marginTop:10}}>
             <div>
               <label className="small">BMI</label>
-              <input className="input" type="number" min="10" max="80" step="0.1" inputMode="decimal" value={form.bmi} onChange={e=>set("bmi",e.target.value)} placeholder="31.2 (10-80)" />
-              <div className="small">Expected range: 10-80 kg/m2²</div>
+              <input className={`input ${fieldErrors.bmi ? "input-error" : ""}`} type="number" min="10" max="80" step="0.1" inputMode="decimal" value={form.bmi} onChange={e=>set("bmi",e.target.value)} placeholder="BMI in kg/m2 (10-80)" />
+              {fieldErrors.bmi && <div className="field-error">{fieldErrors.bmi}</div>}
             </div>
             <div>
               <label className="small">BMI category</label>
@@ -322,9 +346,9 @@ export default function FusionScreening(){
 
           <div className="row" style={{marginTop:10}}>
             <div>
-              <label className="small">Waist</label>
-              <input className="input" type="number" min="40" max="220" step="0.1" inputMode="decimal" value={form.waist_circumference} onChange={e=>set("waist_circumference",e.target.value)} placeholder="98 (40-220)" />
-              <div className="small">Expected range: 40-220 cm</div>
+              <label className="small">Waist Circumference (cm)</label>
+              <input className={`input ${fieldErrors.waist_circumference ? "input-error" : ""}`} type="number" min="40" max="220" step="0.1" inputMode="decimal" value={form.waist_circumference} onChange={e=>set("waist_circumference",e.target.value)} placeholder="40 - 220" />
+              {fieldErrors.waist_circumference && <div className="field-error">{fieldErrors.waist_circumference}</div>}
             </div>
             <div>
               <label className="small">Family history of diabetes</label>
@@ -338,25 +362,27 @@ export default function FusionScreening(){
 
           <div className="row" style={{marginTop:10}}>
             <div>
-              <label className="small">SBP</label>
-              <input className="input" type="number" min="70" max="260" step="1" inputMode="numeric" value={form.systolic_bp} onChange={e=>set("systolic_bp",e.target.value)} placeholder="145 (70-260)" />
-              <div className="small">Expected range: 70-260 mmHg</div>
+              <label className="small">Systolic BP in mmHg</label>
+              <input className={`input ${fieldErrors.systolic_bp ? "input-error" : ""}`} type="number" min="70" max="260" step="1" inputMode="numeric" value={form.systolic_bp} onChange={e=>set("systolic_bp",e.target.value)} placeholder=" 70 - 260" />
+              {fieldErrors.systolic_bp && <div className="field-error">{fieldErrors.systolic_bp}</div>}
             </div>
             <div>
-              <label className="small">DBP</label>
-              <input className="input" type="number" min="40" max="160" step="1" inputMode="numeric" value={form.diastolic_bp} onChange={e=>set("diastolic_bp",e.target.value)} placeholder="90 (40-160)" />
-              <div className="small">Expected range: 40-160 mmHg</div>
+              <label className="small">Diastolic BP in mmHg</label>
+              <input className={`input ${fieldErrors.diastolic_bp ? "input-error" : ""}`} type="number" min="40" max="160" step="1" inputMode="numeric" value={form.diastolic_bp} onChange={e=>set("diastolic_bp",e.target.value)} placeholder="40 - 160" />
+              {fieldErrors.diastolic_bp && <div className="field-error">{fieldErrors.diastolic_bp}</div>}
             </div>
           </div>
 
           <div className="row" style={{marginTop:10}}>
             <div>
               <label className="small">Fasting glucose (mg/dL)</label>
-              <input className="input" type="number" min="40" max="500" step="0.1" inputMode="decimal" value={form.fasting_glucose_mgdl} onChange={e=>set("fasting_glucose_mgdl",e.target.value)} placeholder="110 (40-500)" />
+              <input className={`input ${fieldErrors.fasting_glucose_mgdl ? "input-error" : ""}`} type="number" min="40" max="500" step="0.1" inputMode="decimal" value={form.fasting_glucose_mgdl} onChange={e=>set("fasting_glucose_mgdl",e.target.value)} placeholder=" 40 - 500" />
+              {fieldErrors.fasting_glucose_mgdl && <div className="field-error">{fieldErrors.fasting_glucose_mgdl}</div>}
             </div>
             <div>
               <label className="small">HbA1c (%)</label>
-              <input className="input" type="number" min="3" max="20" step="0.1" inputMode="decimal" value={form.hba1c_pct} onChange={e=>set("hba1c_pct",e.target.value)} placeholder="6.2 (3-20)" />
+              <input className={`input ${fieldErrors.hba1c_pct ? "input-error" : ""}`} type="number" min="3" max="20" step="0.1" inputMode="decimal" value={form.hba1c_pct} onChange={e=>set("hba1c_pct",e.target.value)} placeholder="3 - 20" />
+              {fieldErrors.hba1c_pct && <div className="field-error">{fieldErrors.hba1c_pct}</div>}
             </div>
           </div>
 
@@ -390,7 +416,7 @@ export default function FusionScreening(){
               <div key={k}>
                 <label className="small">{k}</label>
                 <input
-                  className="input"
+                  className={`input ${fieldErrors[`genomics.${k}`] ? "input-error" : ""}`}
                   type="number"
                   step={genomicsSpec(k).step}
                   min={genomicsSpec(k).min}
@@ -398,15 +424,16 @@ export default function FusionScreening(){
                   inputMode="decimal"
                   value={genomicsForm[k] ?? ""}
                   onChange={e=>setGeno(k, e.target.value)}
-                  placeholder="Numeric value only"
+                  placeholder={genomicsSpec(k).hint}
                 />
-                <div className="small">{genomicsSpec(k).hint}</div>
+                {fieldErrors[`genomics.${k}`] && <div className="field-error">{fieldErrors[`genomics.${k}`]}</div>}
               </div>
             ))}
           </div>
           <div style={{height:10}} />
           <label className="small">Or upload one genomics CSV row</label><br/>
-          <input type="file" accept=".csv,text/csv" onChange={e=>setGenomicsFile(e.target.files?.[0]||null)} />
+          <input className={fieldErrors.genomicsFile ? "input-error" : ""} type="file" accept=".csv,text/csv" onChange={e=>{ setGenomicsFile(e.target.files?.[0]||null); clearFieldError("genomicsFile"); }} />
+          {fieldErrors.genomicsFile && <div className="field-error">{fieldErrors.genomicsFile}</div>}
           <p className="small" style={{ marginTop:6 }}>
             CSV format: first line headers, second line one patient row.
           </p>
@@ -417,7 +444,8 @@ export default function FusionScreening(){
         <div className="card">
           <h3 style={{ marginTop:0 }}>Retina Mode</h3>
           <label className="small">Optional retina image</label><br/>
-          <input type="file" accept="image/*" onChange={e=>setRetinaFile(e.target.files?.[0]||null)} />
+          <input className={fieldErrors.retina ? "input-error" : ""} type="file" accept="image/*" onChange={e=>{ setRetinaFile(e.target.files?.[0]||null); clearFieldError("retina"); }} />
+          {fieldErrors.retina && <div className="field-error">{fieldErrors.retina}</div>}
           <p className="small" style={{ marginTop:8 }}>
             JPG/PNG, clear focus, minimal blur/glare, evenly lit, min 512x512 (recommended 1024x1024+), up to 10MB.
           </p>
@@ -426,7 +454,8 @@ export default function FusionScreening(){
         <div className="card">
           <h3 style={{ marginTop:0 }}>Skin Mode</h3>
           <label className="small">Optional skin image</label><br/>
-          <input type="file" accept="image/*" onChange={e=>setSkinFile(e.target.files?.[0]||null)} />
+          <input className={fieldErrors.skin ? "input-error" : ""} type="file" accept="image/*" onChange={e=>{ setSkinFile(e.target.files?.[0]||null); clearFieldError("skin"); }} />
+          {fieldErrors.skin && <div className="field-error">{fieldErrors.skin}</div>}
           <p className="small" style={{ marginTop:8 }}>
             JPG/PNG, clear focus, minimal blur/glare, evenly lit, min 512x512 (recommended 1024x1024+), up to 10MB.
           </p>
@@ -496,7 +525,4 @@ export default function FusionScreening(){
     </div>
   );
 }
-
-
-
 
