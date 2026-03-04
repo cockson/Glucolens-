@@ -26,6 +26,18 @@ class AuditContext:
     output_dir: str
 
 
+HARD_LEAK_KEYWORDS = (
+    "on_antidiabetic",
+    "ground_truth",
+    "y_true",
+    "leak",
+    "diagnos",
+    "outcome",
+    "target",
+    "label",
+)
+
+
 def _mk_out(output_dir: str):
     os.makedirs(output_dir, exist_ok=True)
     return output_dir
@@ -111,9 +123,7 @@ def _group_split_auc(pipe: Pipeline, X: pd.DataFrame, y: np.ndarray, groups: pd.
 
 
 def _keyword_leak_scan(columns: list[str]) -> list[str]:
-    patterns = (
-        "label", "target", "outcome", "diagnos", "diabet", "on_antidiabetic", "ground_truth", "y_true"
-    )
+    patterns = HARD_LEAK_KEYWORDS
     suspicious = []
     for c in columns:
         lc = c.lower()
@@ -196,6 +206,9 @@ def run_audit(
     site_col: str = "source_file",
     patient_col: str = "patient_key",
     strict: bool = False,
+    max_shuffle_auroc: float = 0.55,
+    severe_perfect_bin_support: int = 100,
+    severe_perfect_bin_count: int = 10,
 ) -> dict:
     _mk_out(output_dir)
     df = pd.read_csv(csv_path)
@@ -230,9 +243,11 @@ def run_audit(
     failures = []
     warnings = []
 
-    if auc_shuffle > 0.60:
-        failures.append(f"Label-shuffle AUROC too high ({auc_shuffle:.3f} > 0.60). Possible leakage.")
-    elif auc_shuffle > 0.55:
+    if auc_shuffle > max_shuffle_auroc:
+        failures.append(
+            f"Label-shuffle AUROC too high ({auc_shuffle:.3f} > {max_shuffle_auroc:.2f}). Possible leakage."
+        )
+    elif auc_shuffle > (max_shuffle_auroc - 0.03):
         warnings.append(f"Label-shuffle AUROC elevated ({auc_shuffle:.3f}). Investigate.")
 
     if site_report.get("available"):
@@ -258,11 +273,21 @@ def run_audit(
         warnings.append(
             f"Potential perfect-predictor bins detected in {len(perfect_predictors)} feature(s)."
         )
+        severe = [
+            x for x in perfect_predictors
+            if x["max_support"] >= severe_perfect_bin_support and x["n_perfect_bins"] >= severe_perfect_bin_count
+        ]
+        if severe:
+            failures.append(
+                "Severe perfect-predictor bins detected: "
+                + ", ".join([f"{x['feature']}(support={x['max_support']}, bins={x['n_perfect_bins']})" for x in severe[:5]])
+            )
 
     # Ignore known target col itself if present; still flag others.
     bad_keyword_hits = [c for c in leak_keyword_hits if c != target_col]
     if bad_keyword_hits:
         warnings.append(f"Leakage-like column names detected: {bad_keyword_hits[:10]}")
+        failures.append(f"Hard leakage-like column names detected: {bad_keyword_hits[:10]}")
 
     report = {
         "status": "fail" if failures else "pass",
@@ -306,6 +331,9 @@ def main():
     parser.add_argument("--patient-col", default="patient_key")
     parser.add_argument("--output-dir", default=os.path.join("artifacts", "audit", "tabular"))
     parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--max-shuffle-auroc", type=float, default=0.55)
+    parser.add_argument("--severe-perfect-bin-support", type=int, default=100)
+    parser.add_argument("--severe-perfect-bin-count", type=int, default=10)
     args = parser.parse_args()
 
     report = run_audit(
@@ -315,6 +343,9 @@ def main():
         site_col=args.site_col,
         patient_col=args.patient_col,
         strict=args.strict,
+        max_shuffle_auroc=args.max_shuffle_auroc,
+        severe_perfect_bin_support=args.severe_perfect_bin_support,
+        severe_perfect_bin_count=args.severe_perfect_bin_count,
     )
     print(json.dumps(report["summary"], indent=2))
     if report["warnings"]:
@@ -329,4 +360,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
