@@ -56,10 +56,24 @@ async def security_headers(request: Request, call_next):
 
 # --- CORS ---
 origins = [o.strip() for o in settings.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
+if "https://glucolens.pages.com" not in origins:
+    origins.append("https://glucolens.pages.com")
+
 allow_origin_regex = None
 if settings.ENV == "dev":
-    # Developer convenience: allow localhost/127.0.0.1 across ports to avoid CORS "Network Error".
+    # Developer convenience: allow localhost across ports.
     allow_origin_regex = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+else:
+    allow_origin_regex = None
+
+# Allow GitHub Codespaces forwarded URLs in every environment.
+codespaces_origin_regex = r"^https://[a-zA-Z0-9-]+-\d+\.app\.github\.dev$"
+if allow_origin_regex:
+    allow_origin_regex = (
+        f"{allow_origin_regex}|{codespaces_origin_regex}"
+    )
+else:
+    allow_origin_regex = codespaces_origin_regex
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
