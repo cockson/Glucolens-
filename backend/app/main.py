@@ -15,6 +15,7 @@ from fastapi_limiter import FastAPILimiter
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.api.routes import retina
 # from app.gpt.router import router as gpt_router
+from urllib.parse import urlsplit
 
 
 # Optional: rate limiting (only enable if limiter exists)
@@ -55,25 +56,40 @@ async def security_headers(request: Request, call_next):
 
 
 # --- CORS ---
-origins = [o.strip() for o in settings.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
-if "https://glucolens.pages.com" not in origins:
-    origins.append("https://glucolens.pages.com")
+def _normalize_origin(origin: str) -> str | None:
+    candidate = origin.strip()
+    if not candidate:
+        return None
+    parsed = urlsplit(candidate)
+    if not parsed.scheme or not parsed.netloc:
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}"
 
-allow_origin_regex = None
+
+origins = []
+for candidate in settings.CORS_ALLOW_ORIGINS.split(","):
+    normalized_origin = _normalize_origin(candidate)
+    if normalized_origin and normalized_origin not in origins:
+        origins.append(normalized_origin)
+
+for candidate in (
+    settings.FRONTEND_BASE_URL,
+    "https://glucolens.pages.com",
+    "https://glucolens.pages.dev",
+):
+    normalized_origin = _normalize_origin(candidate)
+    if normalized_origin and normalized_origin not in origins:
+        origins.append(normalized_origin)
+
+origin_regex_parts = [
+    r"^https://(?:[a-zA-Z0-9-]+\.)?[a-zA-Z0-9-]+\.pages\.dev$",
+    r"^https://[a-zA-Z0-9-]+-\d+\.app\.github\.dev$",
+]
 if settings.ENV == "dev":
     # Developer convenience: allow localhost across ports.
-    allow_origin_regex = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
-else:
-    allow_origin_regex = None
+    origin_regex_parts.insert(0, r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$")
 
-# Allow GitHub Codespaces forwarded URLs in every environment.
-codespaces_origin_regex = r"^https://[a-zA-Z0-9-]+-\d+\.app\.github\.dev$"
-if allow_origin_regex:
-    allow_origin_regex = (
-        f"{allow_origin_regex}|{codespaces_origin_regex}"
-    )
-else:
-    allow_origin_regex = codespaces_origin_regex
+allow_origin_regex = "|".join(origin_regex_parts)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
