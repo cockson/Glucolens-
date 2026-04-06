@@ -1,6 +1,8 @@
 import json
 import os
 import re
+import threading
+import time
 import numpy as np
 import pandas as pd
 from joblib import load
@@ -34,6 +36,31 @@ _cached = {
     "target_idx": None,
 }
 EXPLAIN_METHOD = os.getenv("TABULAR_EXPLAIN_METHOD", "occlusion").strip().lower()
+_model_lock = threading.Lock()
+_warmup_lock = threading.Lock()
+_warmup_thread: threading.Thread | None = None
+_warmup_state = {
+    "status": "idle",
+    "started_at": None,
+    "finished_at": None,
+    "error": None,
+}
+
+
+def _max_model_size_bytes() -> int | None:
+    raw = os.getenv("TABULAR_MAX_MODEL_SIZE_MB", "").strip()
+    if raw:
+        try:
+            value = float(raw)
+            if value > 0:
+                return int(value * 1024 * 1024)
+        except ValueError:
+            pass
+
+    if os.getenv("ENV", "").strip().lower() == "prod":
+        return 64 * 1024 * 1024
+
+    return None
 
 def _read_json(path: str):
     with open(path, "r", encoding="utf-8") as f:
@@ -61,6 +88,39 @@ def load_registry():
     if not reg_path:
         raise FileNotFoundError("Tabular registry.json not found")
     return _read_json(reg_path)["current"]
+
+
+def _set_warmup_state(status: str, *, error: str | None = None):
+    with _warmup_lock:
+        _warmup_state["status"] = status
+        _warmup_state["error"] = error
+        now = time.time()
+        if status == "loading":
+            _warmup_state["started_at"] = now
+            _warmup_state["finished_at"] = None
+        elif status in {"ready", "failed"}:
+            if _warmup_state["started_at"] is None:
+                _warmup_state["started_at"] = now
+            _warmup_state["finished_at"] = now
+
+
+def get_model_status() -> dict:
+    with _warmup_lock:
+        status = dict(_warmup_state)
+
+    meta = _cached.get("meta") or {}
+    reg = {}
+    if not meta:
+        try:
+            reg = load_registry()
+        except Exception:
+            reg = {}
+
+    model_meta = meta or reg
+    status["loaded"] = _cached.get("model") is not None
+    status["model_name"] = model_meta.get("model_name")
+    status["model_version"] = model_meta.get("model_version")
+    return status
 
 def _resolve_model_path(path: str) -> str:
     if not path:
@@ -121,20 +181,11 @@ def _load_model_with_fallback(meta: dict) -> tuple[object, str]:
     repo_relative_path = infer_repo_relative_artifact_path(meta.get("model_path", ""))
     candidates: list[str] = []
     errors: list[str] = []
+    max_model_size_bytes = _max_model_size_bytes()
 
     if model_path and os.path.isfile(model_path) and not is_git_lfs_pointer(model_path):
         candidates.append(model_path)
     candidates.extend(_local_model_candidates(meta.get("model_name"), preferred_path=model_path))
-
-    if model_path and model_path not in candidates:
-        try:
-            hydrated_path = ensure_artifact_file(
-                model_path,
-                repo_relative_path=repo_relative_path,
-            )
-            candidates.append(hydrated_path)
-        except Exception as exc:
-            errors.append(f"{type(exc).__name__}: {exc}")
 
     seen = set()
     for candidate in candidates:
@@ -142,10 +193,43 @@ def _load_model_with_fallback(meta: dict) -> tuple[object, str]:
         if candidate_norm in seen:
             continue
         seen.add(candidate_norm)
+        if max_model_size_bytes is not None:
+            try:
+                candidate_size = os.path.getsize(candidate_norm)
+            except OSError as exc:
+                errors.append(f"{os.path.basename(candidate_norm)} -> OSError: {exc}")
+                continue
+            if candidate_size > max_model_size_bytes:
+                errors.append(
+                    f"{os.path.basename(candidate_norm)} -> skipped_oversized_model: "
+                    f"{candidate_size} bytes exceeds {max_model_size_bytes} byte limit"
+                )
+                continue
         try:
             return load(candidate_norm), candidate_norm
         except Exception as exc:
             errors.append(f"{os.path.basename(candidate_norm)} -> {type(exc).__name__}: {exc}")
+
+    if model_path and model_path not in seen:
+        try:
+            hydrated_path = ensure_artifact_file(
+                model_path,
+                repo_relative_path=repo_relative_path,
+            )
+            hydrated_norm = os.path.normpath(hydrated_path)
+            if max_model_size_bytes is not None:
+                hydrated_size = os.path.getsize(hydrated_norm)
+                if hydrated_size > max_model_size_bytes:
+                    errors.append(
+                        f"{os.path.basename(hydrated_norm)} -> skipped_oversized_model: "
+                        f"{hydrated_size} bytes exceeds {max_model_size_bytes} byte limit"
+                    )
+                else:
+                    return load(hydrated_norm), hydrated_norm
+            else:
+                return load(hydrated_norm), hydrated_norm
+        except Exception as exc:
+            errors.append(f"{type(exc).__name__}: {exc}")
 
     detail = "; ".join(errors) if errors else "no_model_candidates"
     raise RuntimeError(f"tabular_model_load_failed: {detail}")
@@ -161,46 +245,133 @@ def _apply_loaded_model_metadata(meta: dict, model_path: str) -> dict:
         resolved["model_version"] = parsed_version
     return resolved
 
+
+def _load_model_card_for_meta(meta: dict | None = None) -> dict | None:
+    meta = meta or {}
+    candidate = _resolve_model_path(meta.get("modelcard_path", ""))
+    path = _first_existing([
+        candidate,
+        os.path.join(ART_DIR, "modelcard.json"),
+        os.path.join(ALT_ART_DIR, "modelcard.json"),
+    ])
+    if not path:
+        for base in [ART_DIR, ALT_ART_DIR]:
+            if not os.path.exists(base):
+                continue
+            cards = [os.path.join(base, f) for f in os.listdir(base) if f.endswith(".modelcard.json")]
+            if cards:
+                path = sorted(cards)[-1]
+                break
+    if not path:
+        return None
+    return _read_json(path)
+
+
+def _load_model_into_cache():
+    reg = load_registry()
+    meta = dict(reg)
+    model, model_path = _load_model_with_fallback(meta)
+    meta = _apply_loaded_model_metadata(meta, model_path)
+
+    card = _load_model_card_for_meta(meta)
+    feature_cols = None
+    classes = None
+    target_idx = None
+    if card:
+        feature_cols = card.get("features")
+        card_classes = card.get("classes")
+        if isinstance(card_classes, list) and card_classes:
+            classes = [str(c) for c in card_classes]
+        target_idx = card.get("target_index_diabetic")
+
+    model_feature_cols = None
+    if hasattr(model, "feature_names_in_"):
+        try:
+            names = list(model.feature_names_in_)
+            if names:
+                model_feature_cols = names
+        except Exception:
+            pass
+
+    numeric_feature_cols = None
+    preprocess = None
+    try:
+        base_estimator = getattr(model, "estimator", None)
+        if base_estimator is None and getattr(model, "calibrated_classifiers_", None):
+            base_estimator = getattr(model.calibrated_classifiers_[0], "estimator", None)
+        named_steps = getattr(base_estimator, "named_steps", {}) or {}
+        preprocess = named_steps.get("preprocess") or named_steps.get("pre")
+    except Exception:
+        preprocess = None
+    if preprocess is not None:
+        for name, _transformer, cols in getattr(preprocess, "transformers_", []):
+            if name == "num":
+                numeric_feature_cols = list(cols)
+                break
+    if classes is None and hasattr(model, "classes_"):
+        classes = [str(c) for c in model.classes_]
+
+    _cached["model"] = model
+    _cached["meta"] = meta
+    _cached["explainer"] = None
+    _cached["feature_cols"] = feature_cols
+    _cached["model_feature_cols"] = model_feature_cols
+    _cached["numeric_feature_cols"] = numeric_feature_cols
+    _cached["classes"] = classes
+    _cached["target_idx"] = target_idx
+
 def get_model():
     if _cached["model"] is None:
-        reg = load_registry()
-        _cached["meta"] = dict(reg)
-        _cached["model"], model_path = _load_model_with_fallback(_cached["meta"])
-        _cached["meta"] = _apply_loaded_model_metadata(_cached["meta"], model_path)
-        # infer feature columns from modelcard if available
-        card_path = _first_existing([os.path.join(ART_DIR, "modelcard.json"), os.path.join(ALT_ART_DIR, "modelcard.json")])
-        if card_path:
-            card = _read_json(card_path)
-            _cached["feature_cols"] = card.get("features")
-            card_classes = card.get("classes")
-            if isinstance(card_classes, list) and card_classes:
-                _cached["classes"] = [str(c) for c in card_classes]
-            _cached["target_idx"] = card.get("target_index_diabetic")
-        # Prefer feature names embedded in the trained estimator when present.
-        if hasattr(_cached["model"], "feature_names_in_"):
-            try:
-                names = list(_cached["model"].feature_names_in_)
-                if names:
-                    _cached["model_feature_cols"] = names
-            except Exception:
-                pass
-        preprocess = None
-        try:
-            base_estimator = getattr(_cached["model"], "estimator", None)
-            if base_estimator is None and getattr(_cached["model"], "calibrated_classifiers_", None):
-                base_estimator = getattr(_cached["model"].calibrated_classifiers_[0], "estimator", None)
-            named_steps = getattr(base_estimator, "named_steps", {}) or {}
-            preprocess = named_steps.get("preprocess") or named_steps.get("pre")
-        except Exception:
-            preprocess = None
-        if preprocess is not None:
-            for name, _transformer, cols in getattr(preprocess, "transformers_", []):
-                if name == "num":
-                    _cached["numeric_feature_cols"] = list(cols)
-                    break
-        if _cached["classes"] is None and hasattr(_cached["model"], "classes_"):
-            _cached["classes"] = [str(c) for c in _cached["model"].classes_]
+        with _model_lock:
+            if _cached["model"] is None:
+                _load_model_into_cache()
     return _cached["model"], _cached["meta"]
+
+
+def _warmup_model():
+    try:
+        _set_warmup_state("loading")
+        get_model()
+        _set_warmup_state("ready")
+    except Exception as exc:
+        _set_warmup_state("failed", error=f"{type(exc).__name__}: {exc}")
+
+
+def start_model_warmup(force: bool = False) -> bool:
+    global _warmup_thread
+
+    if _cached["model"] is not None and not force:
+        _set_warmup_state("ready")
+        return False
+
+    with _warmup_lock:
+        current_status = _warmup_state["status"]
+        thread_alive = _warmup_thread is not None and _warmup_thread.is_alive()
+        if thread_alive and not force:
+            return False
+        if current_status == "ready" and not force:
+            return False
+        _warmup_state["status"] = "queued"
+        _warmup_state["error"] = None
+        _warmup_state["started_at"] = time.time()
+        _warmup_state["finished_at"] = None
+        _warmup_thread = threading.Thread(target=_warmup_model, name="tabular-model-warmup", daemon=True)
+        _warmup_thread.start()
+        return True
+
+
+def ensure_model_ready():
+    if _cached["model"] is not None:
+        return
+
+    status = get_model_status()
+    if status["status"] == "failed":
+        raise RuntimeError(f"tabular_model_unavailable: {status.get('error') or 'warmup_failed'}")
+    if status["status"] in {"queued", "loading"}:
+        raise RuntimeError("tabular_model_warming_up: the tabular model is still loading, retry shortly")
+
+    start_model_warmup()
+    raise RuntimeError("tabular_model_warming_up: tabular model warmup started, retry shortly")
 
 def _coerce_payload_value(payload: dict, key):
     if key in payload:
@@ -370,6 +541,7 @@ def _occlusion_top(model, X: pd.DataFrame, base_proba: float, target_idx: int, m
     ]
 
 def predict_tabular(payload: dict):
+    ensure_model_ready()
     model, meta = get_model()
     X = build_input_df(payload)
     proba, _ = _predict_proba_safe(model, X)
@@ -386,6 +558,7 @@ def predict_tabular(payload: dict):
     }
 
 def predict_with_explain(payload: dict, max_features: int = 10):
+    ensure_model_ready()
     model, meta = get_model()
     X = build_input_df(payload)
     proba, X = _predict_proba_safe(model, X)
@@ -429,24 +602,10 @@ def predict_with_explain(payload: dict, max_features: int = 10):
 
 def load_model_card():
     reg = load_registry()
-    candidate = _resolve_model_path(reg.get("modelcard_path", ""))
-    path = _first_existing([
-        os.path.join(ART_DIR, "modelcard.json"),
-        candidate,
-        os.path.join(ALT_ART_DIR, "modelcard.json"),
-    ])
-    if not path:
-        # Fallback to any versioned model card generated by training.
-        for base in [ART_DIR, ALT_ART_DIR]:
-            if not os.path.exists(base):
-                continue
-            cards = [os.path.join(base, f) for f in os.listdir(base) if f.endswith(".modelcard.json")]
-            if cards:
-                path = sorted(cards)[-1]
-                break
-    if not path:
+    card = _load_model_card_for_meta(reg)
+    if not card:
         raise FileNotFoundError("Tabular model card not found")
-    return _sanitize_json(_read_json(path))
+    return _sanitize_json(card)
 
 def load_performance():
     reg = load_registry()

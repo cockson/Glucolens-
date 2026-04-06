@@ -10,6 +10,21 @@ import { Link } from "react-router-dom";
 const COUNTRY_RE = /^[A-Z]{2}$/;
 const PATIENT_KEY_RE = /^[A-Za-z0-9_-]{3,64}$/;
 
+function screeningRequestError(err, fallback) {
+  if (err?.code === "ECONNABORTED") {
+    return "Prediction timed out. The server may be waking up or overloaded.";
+  }
+  if (!err?.response) {
+    return "Prediction service is temporarily unavailable. Please retry in a moment.";
+  }
+  return err?.response?.data?.detail || fallback;
+}
+
+function formatProbability(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(3) : "N/A";
+}
+
 export default function TabularScreening() {
   const auth = getAuth();
   const isPublic = auth?.role === "public";
@@ -97,7 +112,7 @@ export default function TabularScreening() {
       setPredictionId(res.data.prediction_id);
     } catch (e) {
       if (isLockedError(e)) setLocked(lockedMessage(e));
-      else setErr(e?.response?.data?.detail || "Prediction failed");
+      else setErr(screeningRequestError(e, "Prediction failed"));
     } finally {
       setBusy(false);
     }
@@ -148,7 +163,7 @@ export default function TabularScreening() {
       clearQueue();
       setErr(`Synced ${okCount} queued screenings.`);
     } catch (e) {
-      setErr(e?.response?.data?.detail || "Sync failed (partial).");
+      setErr(screeningRequestError(e, "Sync failed (partial)."));
     } finally {
       setBusy(false);
     }
@@ -314,11 +329,11 @@ export default function TabularScreening() {
                   Predicted: <b>{labelText(result.predicted_label)}</b>
                 </p>
                 <p className="small">
-                  P(non-diabetic): <b>{result.probabilities?.non_diabetic?.toFixed?.(3) ?? result.probabilities?.non_diabetic ?? result.probabilities?.not_diabetic}</b>
+                  P(non-diabetic): <b>{formatProbability(result.probabilities?.non_diabetic ?? result.probabilities?.not_diabetic)}</b>
                   <br />
-                  P(prediabetic): <b>{result.probabilities?.prediabetic?.toFixed?.(3) ?? result.probabilities?.prediabetic}</b>
+                  P(prediabetic): <b>{formatProbability(result.probabilities?.prediabetic)}</b>
                   <br />
-                  P(diabetic): <b>{result.probabilities?.diabetic?.toFixed?.(3) ?? result.probabilities?.diabetic ?? result.probabilities?.t2d}</b>
+                  P(diabetic): <b>{formatProbability(result.probabilities?.diabetic ?? result.probabilities?.t2d)}</b>
                 </p>
 
                 <div className="card" style={{ marginTop: 10 }}>

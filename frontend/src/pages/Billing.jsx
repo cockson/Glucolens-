@@ -5,6 +5,32 @@ import { useNavigate } from "react-router-dom";
 
 function naira(kobo){ return "NGN " + (kobo/100).toLocaleString(); }
 
+function loadPaystackSdk() {
+  if (window.PaystackPop) {
+    return Promise.resolve(window.PaystackPop);
+  }
+
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-paystack-sdk="true"]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.PaystackPop), { once: true });
+      existing.addEventListener("error", () => reject(new Error("Failed to load Paystack SDK.")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://js.paystack.co/v1/inline.js";
+    script.async = true;
+    script.dataset.paystackSdk = "true";
+    script.onload = () => {
+      if (window.PaystackPop) resolve(window.PaystackPop);
+      else reject(new Error("Paystack SDK loaded without PaystackPop."));
+    };
+    script.onerror = () => reject(new Error("Failed to load Paystack SDK. Check access to js.paystack.co."));
+    document.body.appendChild(script);
+  });
+}
+
 export default function Billing(){
   const [plans, setPlans] = useState([]);
   const [me, setMe] = useState(null);
@@ -54,12 +80,8 @@ export default function Billing(){
       });
 
       const { reference } = init.data;
-
-      if (!window.PaystackPop) {
-        throw new Error("Paystack SDK not loaded. Check index.html script tag.");
-      }
-
-      const handler = window.PaystackPop.setup({
+      const PaystackPop = await loadPaystackSdk();
+      const handler = PaystackPop.setup({
         key,
         email,
         amount: plan.amount_kobo,

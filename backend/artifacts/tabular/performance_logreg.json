@@ -1,0 +1,27 @@
+{
+  "current": {
+    "model_name": "tabular_logreg_calibrated",
+    "model_version": "20260225_172331",
+    "model_path": "artifacts/tabular/tabular_logreg_calibrated_20260225_172331.joblib",
+    "modelcard_path": "artifacts/tabular/tabular_logreg_calibrated_20260225_172331.modelcard.json"
+  },
+  "training": {
+    "source": "train_tabular.csv",
+    "n_samples": 30000,
+    "cv": "5-fold stratified; OOF metrics",
+    "calibration": "sigmoid (Platt) via CalibratedClassifierCV"
+  },
+  "metrics_oof": {
+    "auroc": 0.6539549112006803,
+    "brier": 0.18134647161443845,
+    "accuracy": 0.7379666666666667
+  },
+  "classes": [
+    "not_diabetic",
+    "t2d"
+  ],
+  "notes": [
+    "Active lightweight fallback model for tabular screening.",
+    "This model is binary and does not emit a separate prediabetic probability."
+  ]
+}

@@ -3,6 +3,7 @@
     "model_name": "tabular_rf_cal_sigmoid_smote_1",
     "model_version": "20260301_042231",
     "model_path": "artifacts/tabular/tabular_rf_cal_sigmoid_smote_1_20260301_042231.joblib",
+    "modelcard_path": "artifacts/tabular/modelcard.json",
     "performance_path": "artifacts/tabular/performance.json",
     "comparison_csv": "artifacts/tabular/comparison.csv"
   }

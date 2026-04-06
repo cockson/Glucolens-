@@ -9,7 +9,7 @@ from app.db.session import get_db
 from app.db.models import PredictionRecord, User
 from app.api.deps_billing import require_active_subscription
 from app.api.deps import get_current_user
-from app.ml.tabular.serve import predict_with_explain
+from app.ml.tabular.serve import predict_with_explain, ensure_model_ready
 from fastapi.responses import StreamingResponse
 from app.ml.tabular.serve import load_model_card, load_performance
 from app.ml.tabular.report import render_tabular_report_pdf
@@ -35,6 +35,7 @@ def _optional_rate_limit(times: int, seconds: int):
 
 def _predict_and_store(payload: dict, db: Session, user: User):
     try:
+        ensure_model_ready()
         result = predict_with_explain(payload)
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=f"tabular_model_unavailable: {str(e)}")

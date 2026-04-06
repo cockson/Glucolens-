@@ -41,6 +41,8 @@ services:
         sync: false
       - key: PAYSTACK_WEBHOOK_SECRET
         sync: false
+      - key: TABULAR_MAX_MODEL_SIZE_MB
+        value: "256"
       - key: PHARMACY_MONTHLY_KOBO
         value: "700000"
       - key: PHARMACY_ANNUAL_KOBO
