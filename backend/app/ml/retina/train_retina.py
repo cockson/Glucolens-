@@ -224,7 +224,8 @@ def main():
     with open(os.path.join(ART_DIR, "modelcard.json"), "w", encoding="utf-8") as f:
         json.dump(modelcard, f, indent=2)
 
-    reg = {"current": {"model_name": model_name, "model_version": version, "model_path": path}}
+    model_ref = os.path.relpath(path, REPO_ROOT).replace(os.sep, "/")
+    reg = {"current": {"model_name": model_name, "model_version": version, "model_path": model_ref}}
     with open(os.path.join(ART_DIR, "registry.json"), "w", encoding="utf-8") as f:
         json.dump(reg, f, indent=2)
 

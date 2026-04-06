@@ -2,8 +2,8 @@
   "current": {
     "model_name": "tabular_rf_cal_sigmoid_smote_1",
     "model_version": "20260301_042231",
-    "model_path": "C:\\Users\\Administrator\\Desktop\\Glucolens\\backend\\artifacts\\tabular\\tabular_rf_cal_sigmoid_smote_1_20260301_042231.joblib",
-    "performance_path": "C:\\Users\\Administrator\\Desktop\\Glucolens\\backend\\artifacts\\tabular\\performance.json",
-    "comparison_csv": "C:\\Users\\Administrator\\Desktop\\Glucolens\\backend\\artifacts\\tabular\\comparison.csv"
+    "model_path": "artifacts/tabular/tabular_rf_cal_sigmoid_smote_1_20260301_042231.joblib",
+    "performance_path": "artifacts/tabular/performance.json",
+    "comparison_csv": "artifacts/tabular/comparison.csv"
   }
 }

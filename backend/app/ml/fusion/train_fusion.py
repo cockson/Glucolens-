@@ -204,7 +204,8 @@ def main():
         "estimator": estimator
     }
 
-    dump(bundle, os.path.join(ART_DIR, f"{model_name}_{version}.joblib"), compress=3)
+    model_path = os.path.join(ART_DIR, f"{model_name}_{version}.joblib")
+    dump(bundle, model_path, compress=3)
 
     with open(os.path.join(ART_DIR,"performance.json"),"w",encoding="utf-8") as f:
         json.dump({
@@ -215,11 +216,12 @@ def main():
             "n_samples": int(n_samples),
         }, f, indent=2)
 
+    model_ref = os.path.relpath(model_path, REPO_ROOT).replace(os.sep, "/")
     with open(os.path.join(ART_DIR,"registry.json"),"w",encoding="utf-8") as f:
         json.dump({"current":{
             "model_name": model_name,
             "model_version": version,
-            "model_path": os.path.join(ART_DIR, f"{model_name}_{version}.joblib")
+            "model_path": model_ref
         }}, f, indent=2)
 
     print("Saved fusion model + registry.")

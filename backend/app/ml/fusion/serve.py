@@ -1,6 +1,7 @@
 import os, json
 import numpy as np
 from joblib import load
+from app.ml.artifacts import resolve_artifact_path
 
 # Resolve paths relative to backend repo root regardless of cwd.
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -24,12 +25,12 @@ def _load_registry():
         return json.load(f)["current"]
 
 def _resolve_model_path(path: str) -> str:
-    if os.path.isabs(path):
-        return path
-    # If path starts with "backend/...", resolve from project root.
-    if path == "backend" or path.startswith(f"backend{os.sep}"):
-        return os.path.join(PROJECT_ROOT, path)
-    return os.path.join(REPO_ROOT, path)
+    return resolve_artifact_path(
+        path,
+        repo_root=REPO_ROOT,
+        project_root=PROJECT_ROOT,
+        artifact_dir=_find_fusion_dir(),
+    )
 
 def get_fusion_bundle():
     if _cached["bundle"] is None:

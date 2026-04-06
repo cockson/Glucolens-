@@ -8,6 +8,7 @@ from app.ml.retina.quality import quality_check_rgb_uint8, pil_to_rgb_uint8
 import torch
 from torchvision import transforms
 
+from app.ml.artifacts import resolve_artifact_path
 from app.ml.retina.model import build_retina_model
 from app.ml.retina.gradcam import GradCAM, overlay_cam_on_image
 
@@ -28,11 +29,12 @@ def _find_art_dir() -> str:
     raise FileNotFoundError(f"retina registry.json not found. Checked: {ART_CANDIDATES}")
 
 def _resolve_model_path(path: str) -> str:
-    if os.path.isabs(path):
-        return path
-    if path == "backend" or path.startswith(f"backend{os.sep}"):
-        return os.path.join(PROJECT_ROOT, path)
-    return os.path.join(REPO_ROOT, path)
+    return resolve_artifact_path(
+        path,
+        repo_root=REPO_ROOT,
+        project_root=PROJECT_ROOT,
+        artifact_dir=_find_art_dir(),
+    )
 
 def _load_registry():
     art = _find_art_dir()

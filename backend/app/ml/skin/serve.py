@@ -6,6 +6,7 @@ from joblib import load
 import torch
 from torchvision import transforms
 
+from app.ml.artifacts import resolve_artifact_path
 from app.ml.skin.model import build_skin_model
 from app.ml.skin.gradcam import GradCAM, overlay_cam_on_image
 from app.ml.skin.quality import pil_to_rgb_uint8, quality_check_rgb_uint8
@@ -26,11 +27,12 @@ def _find_art_dir() -> str:
     return ART_CANDIDATES[0]
 
 def _resolve_model_path(path: str) -> str:
-    if os.path.isabs(path):
-        return path
-    if path == "backend" or path.startswith(f"backend{os.sep}"):
-        return os.path.join(PROJECT_ROOT, path)
-    return os.path.join(REPO_ROOT, path)
+    return resolve_artifact_path(
+        path,
+        repo_root=REPO_ROOT,
+        project_root=PROJECT_ROOT,
+        artifact_dir=_find_art_dir(),
+    )
 
 def _load_registry():
     art = _find_art_dir()

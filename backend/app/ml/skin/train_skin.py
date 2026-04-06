@@ -222,8 +222,9 @@ def main():
             "created_at_utc": dt.datetime.utcnow().isoformat()+"Z",
         }, f, indent=2)
 
+    model_ref = os.path.relpath(model_path, REPO_ROOT).replace(os.sep, "/")
     with open(os.path.join(ART_DIR,"registry.json"),"w",encoding="utf-8") as f:
-        json.dump({"current":{"model_name":model_name,"model_version":version,"model_path":model_path}}, f, indent=2)
+        json.dump({"current":{"model_name":model_name,"model_version":version,"model_path":model_ref}}, f, indent=2)
 
     print("Saved:", model_path, "Val:", bundle["val_metrics"], "Temp:", temp)
 

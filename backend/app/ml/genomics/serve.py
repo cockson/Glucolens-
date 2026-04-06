@@ -1,6 +1,7 @@
 import json, os
 import pandas as pd
 from joblib import load
+from app.ml.artifacts import resolve_artifact_path
 from app.ml.genomics.prepare_genomics import prepare_genomics
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -33,11 +34,12 @@ def _find_art_dir() -> str:
 
 
 def _resolve_model_path(path: str) -> str:
-    if os.path.isabs(path):
-        return path
-    if path == "backend" or path.startswith(f"backend{os.sep}"):
-        return os.path.join(PROJECT_ROOT, path)
-    return os.path.join(REPO_ROOT, path)
+    return resolve_artifact_path(
+        path,
+        repo_root=REPO_ROOT,
+        project_root=PROJECT_ROOT,
+        artifact_dir=_find_art_dir(),
+    )
 
 def get_model():
     art = _find_art_dir()

@@ -115,11 +115,12 @@ def main():
         final.fit(X, y)
 
     version = dt.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    path = f"{ART}/genomics_{version}.joblib"
+    path = os.path.join(ART, f"genomics_{version}.joblib")
     dump({"estimator":final, "features":list(X.columns), "calibration": calibration_method if final_cv >= 2 else "none"}, path)
 
     with open(f"{ART}/registry.json","w", encoding="utf-8") as f:
-        json.dump({"current":{"model_path":path}}, f, indent=2)
+        model_ref = os.path.relpath(path, REPO_ROOT).replace(os.sep, "/")
+        json.dump({"current":{"model_path":model_ref}}, f, indent=2)
 
     perf = {
         "auc": float(auc),
