@@ -6,7 +6,7 @@ from fastapi_limiter import FastAPILimiter
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.db.models import User
+from app.db.models import PredictionRecord, User
 from app.api.deps_billing import require_active_subscription
 from app.api.deps import get_current_user
 from app.ml.tabular.serve import predict_with_explain
@@ -38,6 +38,10 @@ def _predict_and_store(payload: dict, db: Session, user: User):
         result = predict_with_explain(payload)
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=f"tabular_model_unavailable: {str(e)}")
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"tabular_predict_failed: {type(e).__name__}: {str(e)}")
 
     prediction_id = save_prediction_record(
         db,

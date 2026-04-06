@@ -4,7 +4,12 @@ import re
 import numpy as np
 import pandas as pd
 from joblib import load
-from app.ml.artifacts import ensure_artifact_file, infer_repo_relative_artifact_path, resolve_artifact_path
+from app.ml.artifacts import (
+    ensure_artifact_file,
+    infer_repo_relative_artifact_path,
+    is_git_lfs_pointer,
+    resolve_artifact_path,
+)
 from app.services.screening_program import derive_tabular_features
 try:
     import shap
@@ -67,17 +72,101 @@ def _resolve_model_path(path: str) -> str:
         artifact_dir=ART_DIR,
     )
 
+
+def _parse_versioned_model_filename(path: str) -> tuple[str | None, str | None]:
+    name = os.path.basename(path or "")
+    match = re.match(r"^(?P<model_name>.+)_(?P<model_version>\d{8}_\d{6})\.joblib$", name)
+    if not match:
+        return None, None
+    return match.group("model_name"), match.group("model_version")
+
+
+def _local_model_candidates(model_name: str | None, preferred_path: str | None = None) -> list[str]:
+    preferred_norm = os.path.normpath(preferred_path) if preferred_path else None
+    buckets: list[list[tuple[tuple[str, float], str]]] = [[], []]
+    prefix = f"{model_name}_" if model_name else None
+
+    for base in [ART_DIR, ALT_ART_DIR]:
+        if not os.path.isdir(base):
+            continue
+        for entry in os.listdir(base):
+            if not entry.endswith(".joblib"):
+                continue
+            full_path = os.path.normpath(os.path.join(base, entry))
+            if preferred_norm and full_path == preferred_norm:
+                continue
+            if not os.path.isfile(full_path) or is_git_lfs_pointer(full_path):
+                continue
+
+            _parsed_name, parsed_version = _parse_versioned_model_filename(entry)
+            sort_key = (parsed_version or "", os.path.getmtime(full_path))
+            if prefix and entry.startswith(prefix):
+                buckets[0].append((sort_key, full_path))
+            else:
+                buckets[1].append((sort_key, full_path))
+
+    ordered: list[str] = []
+    seen = set()
+    for bucket in buckets:
+        for _sort_key, path in sorted(bucket, key=lambda item: item[0], reverse=True):
+            if path in seen:
+                continue
+            seen.add(path)
+            ordered.append(path)
+    return ordered
+
+
+def _load_model_with_fallback(meta: dict) -> tuple[object, str]:
+    model_path = _resolve_model_path(meta.get("model_path", ""))
+    repo_relative_path = infer_repo_relative_artifact_path(meta.get("model_path", ""))
+    candidates: list[str] = []
+    errors: list[str] = []
+
+    if model_path and os.path.isfile(model_path) and not is_git_lfs_pointer(model_path):
+        candidates.append(model_path)
+    candidates.extend(_local_model_candidates(meta.get("model_name"), preferred_path=model_path))
+
+    if model_path and model_path not in candidates:
+        try:
+            hydrated_path = ensure_artifact_file(
+                model_path,
+                repo_relative_path=repo_relative_path,
+            )
+            candidates.append(hydrated_path)
+        except Exception as exc:
+            errors.append(f"{type(exc).__name__}: {exc}")
+
+    seen = set()
+    for candidate in candidates:
+        candidate_norm = os.path.normpath(candidate)
+        if candidate_norm in seen:
+            continue
+        seen.add(candidate_norm)
+        try:
+            return load(candidate_norm), candidate_norm
+        except Exception as exc:
+            errors.append(f"{os.path.basename(candidate_norm)} -> {type(exc).__name__}: {exc}")
+
+    detail = "; ".join(errors) if errors else "no_model_candidates"
+    raise RuntimeError(f"tabular_model_load_failed: {detail}")
+
+
+def _apply_loaded_model_metadata(meta: dict, model_path: str) -> dict:
+    resolved = dict(meta or {})
+    resolved["model_path"] = model_path
+    parsed_name, parsed_version = _parse_versioned_model_filename(model_path)
+    if parsed_name:
+        resolved["model_name"] = parsed_name
+    if parsed_version:
+        resolved["model_version"] = parsed_version
+    return resolved
+
 def get_model():
     if _cached["model"] is None:
         reg = load_registry()
-        _cached["meta"] = reg
-        model_path = _resolve_model_path(reg["model_path"])
-        model_path = ensure_artifact_file(
-            model_path,
-            repo_relative_path=infer_repo_relative_artifact_path(reg.get("model_path", "")),
-        )
-        _cached["meta"]["model_path"] = model_path
-        _cached["model"] = load(model_path)
+        _cached["meta"] = dict(reg)
+        _cached["model"], model_path = _load_model_with_fallback(_cached["meta"])
+        _cached["meta"] = _apply_loaded_model_metadata(_cached["meta"], model_path)
         # infer feature columns from modelcard if available
         card_path = _first_existing([os.path.join(ART_DIR, "modelcard.json"), os.path.join(ALT_ART_DIR, "modelcard.json")])
         if card_path:
