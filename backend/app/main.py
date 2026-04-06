@@ -14,7 +14,7 @@ import redis.asyncio as redis
 from fastapi_limiter import FastAPILimiter
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.api.routes import retina
-# from app.gpt.router import router as gpt_router
+from app.gpt.router import router as gpt_router
 from urllib.parse import urlsplit
 
 
@@ -110,10 +110,15 @@ def health():
 # --- Startup ---
 @app.on_event("startup")
 async def on_startup():
-    # ... existing init
+    # Ensure schema exists for environments that do not run separate migrations.
+    init_db()
+
     if settings.REDIS_URL:
-        r = redis.from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
-        await FastAPILimiter.init(r)
+        try:
+            r = redis.from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
+            await FastAPILimiter.init(r)
+        except Exception as exc:
+            print(f"Rate limiter disabled: {exc}")
 
 
 # --- Routers ---
@@ -132,4 +137,4 @@ app.include_router(fusion.router, prefix="/api/fusion", tags=["fusion"])
 app.include_router(thresholds.router, prefix="/api/thresholds", tags=["thresholds"])
 app.include_router(skin.router, prefix="/api/skin", tags=["skin"])
 app.include_router(genomics.router, prefix="/api/genomics", tags=["genomics"])
-# app.include_router(gpt_router)
+app.include_router(gpt_router, prefix="/api")

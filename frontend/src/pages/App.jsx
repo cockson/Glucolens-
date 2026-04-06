@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { getAuth, setAuth } from "../lib/authStore";
+import { getAuth } from "../lib/authStore";
 import { setAuthHeader } from "../lib/api";
 import { applyTheme } from "../lib/theme";
 import Sidebar from "../components/Sidebar.jsx";
@@ -9,6 +9,7 @@ import RecordOutcome from "./RecordOutcome.jsx";
 import Login from "./Login.jsx";
 import RegisterBusiness from "./RegisterBusiness.jsx";
 import RegisterPublic from "./RegisterPublic.jsx";
+import Landing from "./Landing.jsx";
 import Dashboard from "./Dashboard.jsx";
 import Billing from "./Billing.jsx";
 import BillingCallback from "./BillingCallback.jsx";
@@ -30,7 +31,10 @@ import SkinScreening from "./SkinScreening.jsx";
 import SkinInsights from "./SkinInsights.jsx";
 import GenomicsScreening from "./GenomicsScreening.jsx";
 import GenomicsInsights from "./GenomicsInsights.jsx";
+import AdminConsole from "./AdminConsole.jsx";
+
 const CLINICIAN_ROLES = new Set(["clinician", "facility_admin", "org_admin", "super_admin"]);
+const ADMIN_ROLES = new Set(["facility_admin", "org_admin", "super_admin"]);
 
 function Protected({ children }) {
   const auth = getAuth();
@@ -45,11 +49,11 @@ function ClinicianOnly({ children }) {
   return children;
 }
 
-function HomeRedirect() {
+function AdminOnly({ children }) {
   const auth = getAuth();
   if (!auth?.access_token) return <Navigate to="/login" replace />;
-  if (auth?.role === "public") return <Navigate to="/screening/fusion" replace />;
-  return <Navigate to="/dashboard" replace />;
+  if (!ADMIN_ROLES.has(auth?.role)) return <Navigate to="/dashboard" replace />;
+  return children;
 }
 
 export default function App() {
@@ -65,7 +69,7 @@ export default function App() {
         <Sidebar />
         <div className="app-content">
           <Routes>
-            <Route path="/" element={<HomeRedirect />} />
+            <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register-business" element={<RegisterBusiness />} />
             <Route path="/register-public" element={<RegisterPublic />} />
@@ -82,7 +86,6 @@ export default function App() {
             <Route path="/screening/tabular" element={<ClinicianOnly><TabularScreening /></ClinicianOnly>} />
             <Route path="/quick-check" element={<ClinicianOnly><PublicQuickCheck /></ClinicianOnly>} />
             <Route path="/monitoring" element={<ClinicianOnly><Monitoring /></ClinicianOnly>} />
-            <Route path="*" element={<Navigate to="/" replace />} />
             <Route path="/validation" element={<ClinicianOnly><ExternalValidation /></ClinicianOnly>} />
             <Route path="/screening/retina" element={<ClinicianOnly><RetinaScreening /></ClinicianOnly>} />
             <Route path="/models/retina" element={<ClinicianOnly><RetinaInsights /></ClinicianOnly>} />
@@ -93,6 +96,8 @@ export default function App() {
             <Route path="/screening/skin" element={<ClinicianOnly><SkinScreening /></ClinicianOnly>} />
             <Route path="/screening/genomics" element={<ClinicianOnly><GenomicsScreening /></ClinicianOnly>} />
             <Route path="/models/genomics" element={<ClinicianOnly><GenomicsInsights /></ClinicianOnly>} />
+            <Route path="/admin" element={<AdminOnly><AdminConsole /></AdminOnly>} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
       </div>

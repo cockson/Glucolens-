@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     PAYSTACK_SECRET_KEY: str = ""
     PAYSTACK_PUBLIC_KEY: str = ""
     PAYSTACK_WEBHOOK_SECRET: str = ""
+    OPENAI_API_KEY: str = ""
+    OPENAI_MODEL: str = "gpt-5.2-mini"
+    GPT_MAX_OUTPUT_TOKENS: int = 700
+    GPT_TIMEOUT_SECONDS: int = 30
 
     PHARMACY_MONTHLY_KOBO: int = 700000
     PHARMACY_ANNUAL_KOBO: int = 7000000

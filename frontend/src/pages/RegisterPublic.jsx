@@ -37,23 +37,45 @@ export default function RegisterPublic(){
 
   return (
     <div className="container">
-      <div className="card" style={{ maxWidth: 520, margin:"40px auto" }}>
-        <h2>Public Quick-Check Account</h2>
+      <div className="card auth-card" style={{ maxWidth: 520, margin:"40px auto" }}>
+        <h2>Create Public Quick-Check Account</h2>
         <p className="small">Rate-limited access for single users.</p>
         <form onSubmit={submit}>
-          <input className="input" type="email"  placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} required/>
+          <label className="small" htmlFor="public-email">Email</label>
+          <input
+            id="public-email"
+            className="input"
+            type="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={e=>setEmail(e.target.value)}
+            required
+          />
           <div style={{ height: 10 }} />
-          <input className="input" type="password" placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} required minLength={8}/>
+          <label className="small" htmlFor="public-password">Password</label>
+          <input
+            id="public-password"
+            className="input"
+            type="password"
+            placeholder="Minimum 8 characters"
+            value={password}
+            onChange={e=>setPassword(e.target.value)}
+            required
+            minLength={8}
+          />
           <div style={{ height: 14 }} />
           <button className="btn" type="submit" disabled={loading}>
-            {loading ? "Creating..." : "Create"}
+            {loading ? "Creating..." : "Create account"}
           </button>
         </form>
         {err && <p style={{ color:"#ff8080" }}>{err}</p>}
-        <div className="small" style={{ marginTop: 10 }}>
-          <Link to="/login">Back to login</Link>
+        <div className="small auth-links">
+          <Link className="system-link" to="/login">Back to login</Link>
+          <span className="auth-links-divider">|</span>
+          <Link className="system-link" to="/register-business">Register business</Link>
         </div>
       </div>
     </div>
   );
 }
+

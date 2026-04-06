@@ -184,7 +184,7 @@ export default function CreateReferral() {
                 <QrImage base64={created.qr_png_base64} />
                 <div style={{ height: 10 }} />
                 <div className="small">
-                  Link: <a href={created.referral_url} style={{ color: "white" }}>{created.referral_url}</a>
+                  Link: <a className="system-link" href={created.referral_url}>{created.referral_url}</a>
                 </div>
                 <div className="small">Referral ID: {created.id}</div>
               </div>
@@ -195,3 +195,4 @@ export default function CreateReferral() {
     </div>
   );
 }
+

@@ -10,6 +10,13 @@ const PATIENT_KEY_RE = /^[A-Za-z0-9_-]{3,64}$/;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 export default function FusionScreening(){
+  const GPT_ACTIONS = [
+    { key: "clinical", label: "Clinical Decision Support", path: "/api/gpt/clinical-decision-support" },
+    { key: "patient", label: "Patient Education & Lifestyle", path: "/api/gpt/patient-education" },
+    { key: "trust", label: "Explainability & Trust", path: "/api/gpt/explainability-trust" },
+    { key: "documentation", label: "Clinical Documentation", path: "/api/gpt/clinical-documentation" },
+  ];
+
   const DEFAULT_GENO_FEATURES = [
     "TCF7L2_rs7903146",
     "KCNQ1_rs2237892",
@@ -54,6 +61,8 @@ export default function FusionScreening(){
   const [fieldErrors, setFieldErrors] = useState({});
   const [busy, setBusy] = useState(false);
   const [locked, setLocked] = useState(null);
+  const [gptBusy, setGptBusy] = useState("");
+  const [gptOutputs, setGptOutputs] = useState({});
 
   const fusionLabelText = (label) => {
     if (label === "screen_positive_refer") return "Screen Positive (Refer)";
@@ -270,6 +279,28 @@ export default function FusionScreening(){
     } catch (e) {
       if (isLockedError(e)) setLocked(lockedMessage(e));
       else setErr(extractErrorMessage(e) || "Failed to download report");
+    }
+  }
+
+  async function runAssistant(action) {
+    if (!result) return;
+    setErr("");
+    setGptBusy(action.key);
+    try {
+      const payload = {
+        language: "en",
+        fusion_payload: {
+          ...result,
+          prediction_id: predId || result.prediction_id || null,
+        },
+        doc_type: action.key === "documentation" ? "screening_report" : "soap",
+      };
+      const res = await api.post(action.path, payload, { timeout: SCREENING_TIMEOUT_MS });
+      setGptOutputs((prev) => ({ ...prev, [action.key]: res.data }));
+    } catch (e) {
+      setErr(e?.response?.data?.detail || `Failed to run ${action.label}`);
+    } finally {
+      setGptBusy("");
     }
   }
 
@@ -501,6 +532,44 @@ export default function FusionScreening(){
                         : "Missing required modality data; rely on complete clinical dataset."}
                 </p>
               </div>
+              <div className="card" style={{ marginTop: 10 }}>
+                <b>3 / 6 / 12-Month Screening Plan</b>
+                <p className="small" style={{ marginTop: 8 }}>
+                  Track: <b>{result.screening_plan?.track || "N/A"}</b><br/>
+                  Recommended window: <b>{result.screening_plan?.recommended_window_months || "N/A"} months</b><br/>
+                  {result.screening_plan?.summary || "No screening plan available."}
+                </p>
+                {(result.screening_plan?.timelines || []).map((item) => (
+                  <p key={item.window_months} className="small" style={{ marginTop: 6 }}>
+                    <b>{item.window_months} months</b> ({item.due_date}): {item.status} - {item.note}
+                  </p>
+                ))}
+              </div>
+              <div className="card" style={{ marginTop: 10 }}>
+                <b>Custom GPT Assistants</b>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+                  {GPT_ACTIONS.map((action) => (
+                    <button
+                      key={action.key}
+                      className="btn secondary"
+                      onClick={() => runAssistant(action)}
+                      disabled={Boolean(gptBusy)}
+                    >
+                      {gptBusy === action.key ? "Running..." : action.label}
+                    </button>
+                  ))}
+                </div>
+                {GPT_ACTIONS.map((action) => (
+                  gptOutputs[action.key] ? (
+                    <div key={action.key} className="card" style={{ marginTop: 10 }}>
+                      <b>{gptOutputs[action.key].assistant_name}</b>
+                      <p className="small" style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
+                        {gptOutputs[action.key].content}
+                      </p>
+                    </div>
+                  ) : null
+                ))}
+              </div>
               <button className="btn secondary" onClick={downloadPdf} disabled={!predId}>Download PDF</button>
             </>
           )}
@@ -525,4 +594,3 @@ export default function FusionScreening(){
     </div>
   );
 }
-

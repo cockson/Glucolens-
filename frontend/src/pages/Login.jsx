@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { api } from "../lib/api";
+import { api, setAuthHeader } from "../lib/api";
 import { clearAuth, setAuth } from "../lib/authStore";
 import { useNavigate, Link } from "react-router-dom";
 
@@ -21,19 +21,19 @@ export default function Login() {
       setErr("Password must be at least 8 characters.");
       return;
     }
-    // Prevent stale tokens from interfering with a fresh login attempt.
+
     clearAuth();
     try {
-      const res = await api.post("/api/auth/login", {
+      const tokenRes = await api.post("/api/auth/login", {
         email: normalizedEmail,
         password,
       });
-      setAuth(res.data);
-      // Enrich auth store with role/org metadata used by billing/dashboard.
+      setAuthHeader(tokenRes.data.access_token);
       const me = await api.get("/api/auth/me");
-      setAuth({ ...res.data, ...me.data });
+      setAuth({ ...tokenRes.data, ...me.data });
       nav("/dashboard");
     } catch (e2) {
+      clearAuth();
       const status = e2?.response?.status;
       const detail = e2?.response?.data?.detail || e2?.message || "Login failed";
       setErr(`${status ? `${status} ` : ""}${detail}`);
@@ -42,22 +42,43 @@ export default function Login() {
 
   return (
     <div className="container">
-      <div className="card" style={{ maxWidth: 520, margin: "40px auto" }}>
-        <h2>Login</h2>
-        <p className="small">Access hospital/clinic/pharmacy tools (subscription required).</p>
+      <div className="card auth-card" style={{ maxWidth: 520, margin: "40px auto" }}>
+        <h2>Sign in</h2>
+        <p className="small">Access hospital, clinic, and pharmacy tools.</p>
         <form onSubmit={submit}>
-          <input className="input" type="email" required placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
+          <label className="small" htmlFor="login-email">Email</label>
+          <input
+            id="login-email"
+            className="input"
+            type="email"
+            required
+            placeholder="you@organization.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
           <div style={{ height: 10 }} />
-          <input className="input" type="password" required minLength={8} placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} />
+          <label className="small" htmlFor="login-password">Password</label>
+          <input
+            id="login-password"
+            className="input"
+            type="password"
+            required
+            minLength={8}
+            placeholder="Your password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
           <div style={{ height: 14 }} />
-          <button className="btn" type="submit">Login</button>
+          <button className="btn" type="submit">Sign in</button>
         </form>
         {err && <p style={{ color: "#ff8080" }}>{err}</p>}
-        <div style={{ marginTop: 12 }} className="small">
-          <Link to="/register-business">Register business</Link> •{" "}
-          <Link to="/register-public">Public quick-check</Link>
+        <div className="small auth-links">
+          <Link className="system-link" to="/register-business">Register business</Link>
+          <span className="auth-links-divider">|</span>
+          <Link className="system-link" to="/register-public">Public quick-check</Link>
         </div>
       </div>
     </div>
   );
 }
+

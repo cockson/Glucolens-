@@ -6,6 +6,7 @@ import { api } from "../lib/api";
 export default function Dashboard(){
   const nav = useNavigate();
   const auth = getAuth();
+  const isAdmin = ["facility_admin", "org_admin", "super_admin"].includes(auth?.role);
   const [me, setMe] = useState(null);
   const [sub, setSub] = useState(null);
   const [profileErr, setProfileErr] = useState("");
@@ -115,6 +116,16 @@ export default function Dashboard(){
             <Link className="btn secondary" to="/facilities">Facility Finder</Link>
           </div>
         </div>
+
+        {isAdmin && (
+          <div className="card">
+            <h3 style={{ marginTop: 0 }}>Admin</h3>
+            <p className="small">Organization-level oversight and model retention audit.</p>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <Link className="btn" to="/admin">Admin Console</Link>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

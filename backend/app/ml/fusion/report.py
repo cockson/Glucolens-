@@ -112,6 +112,24 @@ def render_fusion_report_pdf(out: dict) -> bytes:
     y = _line(c, f"Decision reason: {fused.get('reason', 'N/A')}", 2 * cm, y)
     y -= 0.6 * cm
 
+    screening_plan = out.get("screening_plan") or {}
+    if screening_plan:
+        y = _ensure_space(c, y, 5.5 * cm, h)
+        y = _line(c, "Screening Program Plan", 2 * cm, y, "Helvetica-Bold", 12)
+        y = _line(c, f"Recommended window: {_fmt_value(screening_plan.get('recommended_window_months'))} months", 2 * cm, y)
+        y = _line(c, f"Track: {_fmt_value(screening_plan.get('track'))}", 2 * cm, y)
+        y = _line(c, f"Summary: {_fmt_value(screening_plan.get('summary'))}", 2 * cm, y)
+        for item in screening_plan.get("timelines", [])[:3]:
+            y = _line(
+                c,
+                f"- {item.get('window_months', 'N/A')} months ({_fmt_value(item.get('due_date'))}): {_fmt_value(item.get('status'))}",
+                2.4 * cm,
+                y,
+                "Helvetica",
+                9,
+            )
+        y -= 0.6 * cm
+
     # 1) Tabular
     y = _ensure_space(c, y, 5.5 * cm, h)
     y = _line(c, "1. Tabular Mode", 2 * cm, y, "Helvetica-Bold", 12)

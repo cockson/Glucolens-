@@ -4,6 +4,7 @@ import { clearAuth, getAuth } from "../lib/authStore";
 import { getTheme, toggleTheme } from "../lib/theme";
 
 const CLINICIAN_ROLES = new Set(["clinician", "facility_admin", "org_admin", "super_admin"]);
+const ADMIN_ROLES = new Set(["facility_admin", "org_admin", "super_admin"]);
 
 const NAV = [
   {
@@ -43,6 +44,12 @@ const NAV = [
       { to: "/quick-check", label: "Public Quick-Check" },
     ],
   },
+  {
+    title: "Admin",
+    items: [
+      { to: "/admin", label: "Admin Console" },
+    ],
+  },
 ];
 
 export default function Sidebar(){
@@ -50,6 +57,7 @@ export default function Sidebar(){
   const loc = useLocation();
   const auth = getAuth();
   const isClinician = CLINICIAN_ROLES.has(auth?.role);
+  const isAdmin = ADMIN_ROLES.has(auth?.role);
   const [theme, setTheme] = useState(getTheme());
   const [hidden, setHidden] = useState(false);
 
@@ -76,7 +84,9 @@ export default function Sidebar(){
     },
   ];
 
-  const navSections = isClinician ? NAV : publicNav;
+  const navSections = isClinician
+    ? NAV.filter((section) => section.title !== "Admin" || isAdmin)
+    : publicNav;
 
   return (
     <>

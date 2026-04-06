@@ -33,15 +33,20 @@ export default function RegisterBusiness() {
       await api.post("/api/auth/register-business", payload);
       nav("/login");
     } catch (e2) {
-      setErr(e2?.response?.data?.detail || "Registration failed");
+      const detail = e2?.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        setErr(detail.map((x) => x?.msg || "Invalid input").join(", "));
+      } else {
+        setErr(detail || "Registration failed");
+      }
     }
   }
 
   return (
     <div className="container">
-      <div className="card" style={{ maxWidth: 820, margin: "40px auto" }}>
+      <div className="card auth-card" style={{ maxWidth: 820, margin: "40px auto" }}>
         <h2>Register Business</h2>
-        <p className="small">Hospitals, clinics, pharmacies (multi-country).</p>
+        <p className="small">Hospitals, clinics, and pharmacies.</p>
         <form onSubmit={submit} className="row">
           <div>
             <label className="small">Business Email</label>
@@ -75,13 +80,18 @@ export default function RegisterBusiness() {
             <label className="small">Site Code</label>
             <input className="input" required minLength={3} maxLength={30} value={form.site_code} onChange={e=>set("site_code", e.target.value.toUpperCase())} />
           </div>
-          <div style={{ display:"flex", alignItems:"end", gap:10 }}>
-            <button className="btn" type="submit">Create</button>
-            <Link className="btn secondary" to="/login">Back</Link>
+          <div className="auth-actions">
+            <button className="btn" type="submit">Create account</button>
           </div>
         </form>
         {err && <p style={{ color:"#ff8080" }}>{err}</p>}
+        <div className="small auth-links">
+          <Link className="system-link" to="/login">Back to login</Link>
+          <span className="auth-links-divider">|</span>
+          <Link className="system-link" to="/register-public">Public quick-check</Link>
+        </div>
       </div>
     </div>
   );
 }
+
