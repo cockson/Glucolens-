@@ -12,6 +12,7 @@ from app.api.deps_billing import require_active_subscription
 
 from app.ml.retina.serve import predict_retina, load_model_card
 from app.ml.retina.report import render_retina_report_pdf
+from app.services.prediction_records import save_prediction_record
 
 router = APIRouter()
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -55,7 +56,8 @@ def retina_predict(
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=f"retina_model_unavailable: {str(e)}")
 
-    rec = PredictionRecord(
+    prediction_id = save_prediction_record(
+        db,
         id=_uuid(),
         actor_user_id=user.id,
         org_id=user.org_id,
@@ -71,10 +73,7 @@ def retina_predict(
         predicted_label=result["predicted_label"],
         proba_json=json.dumps(result["probabilities"], sort_keys=True),
     )
-    db.add(rec)
-    db.commit()
-
-    result["prediction_id"] = rec.id
+    result["prediction_id"] = prediction_id
     return result
 
 @router.get("/report/{prediction_id}")

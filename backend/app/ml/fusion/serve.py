@@ -1,7 +1,7 @@
 import os, json
 import numpy as np
 from joblib import load
-from app.ml.artifacts import resolve_artifact_path
+from app.ml.artifacts import ensure_artifact_file, infer_repo_relative_artifact_path, resolve_artifact_path
 
 # Resolve paths relative to backend repo root regardless of cwd.
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -36,6 +36,10 @@ def get_fusion_bundle():
     if _cached["bundle"] is None:
         reg = _load_registry()
         model_path = _resolve_model_path(reg["model_path"])
+        model_path = ensure_artifact_file(
+            model_path,
+            repo_relative_path=infer_repo_relative_artifact_path(reg.get("model_path", "")),
+        )
         _cached["bundle"] = load(model_path)
     return _cached["bundle"]
 
@@ -68,6 +72,58 @@ def load_performance():
     with open(perf_path, "r", encoding="utf-8") as f:
         return {"performance": json.load(f)}
 
+
+def _build_feature_row(
+    *,
+    p_tabular: float,
+    p_retina: float | None,
+    retina_ok: bool,
+    p_skin: float | None,
+    skin_ok: bool,
+    p_genomics: float | None,
+    geno_ok: bool,
+    feature_names: list[str] | None = None,
+) -> np.ndarray:
+    row = {
+        "p_tabular": float(p_tabular),
+        "p_retina_eff": (float(p_retina) if p_retina is not None else 0.0) * (1 if retina_ok else 0),
+        "p_skin_eff": (float(p_skin) if p_skin is not None else 0.0) * (1 if skin_ok else 0),
+        "p_genomics_eff": (float(p_genomics) if p_genomics is not None else 0.0) * (1 if geno_ok else 0),
+        "retina_ok": 1 if retina_ok else 0,
+        "skin_ok": 1 if skin_ok else 0,
+        "geno_ok": 1 if geno_ok else 0,
+    }
+    active_probs = np.array(
+        [row["p_tabular"], row["p_retina_eff"], row["p_skin_eff"], row["p_genomics_eff"]],
+        dtype=float,
+    )
+    row["p_mean_active"] = float(active_probs.mean())
+    row["p_max_active"] = float(active_probs.max())
+    row["p_min_active"] = float(active_probs.min())
+    row["p_range_active"] = float(row["p_max_active"] - row["p_min_active"])
+    row["n_modalities_active"] = int(1 + row["retina_ok"] + row["skin_ok"] + row["geno_ok"])
+    row["tab_retina_gap"] = float(abs(row["p_tabular"] - row["p_retina_eff"]))
+    row["tab_skin_gap"] = float(abs(row["p_tabular"] - row["p_skin_eff"]))
+
+    if not feature_names:
+        feature_names = [
+            "p_tabular",
+            "p_retina_eff",
+            "retina_ok",
+            "p_skin_eff",
+            "skin_ok",
+            "p_genomics_eff",
+            "geno_ok",
+            "p_mean_active",
+            "p_max_active",
+            "p_min_active",
+            "p_range_active",
+            "n_modalities_active",
+            "tab_retina_gap",
+            "tab_skin_gap",
+        ]
+    return np.array([[float(row.get(name, 0.0)) for name in feature_names]], dtype=float)
+
 def fusion_predict(
     p_tabular: float | None,
     p_retina: float | None,
@@ -99,15 +155,16 @@ def fusion_predict(
     try:
         bundle = get_fusion_bundle()
         est = bundle["estimator"]
-        x = np.array([[
-            float(p_tabular),
-            float(p_retina) if p_retina is not None else 0.0,
-            1 if retina_ok else 0,
-            float(p_skin) if p_skin is not None else 0.0,
-            1 if skin_ok else 0,
-            float(p_genomics) if p_genomics is not None else 0.0,
-            1 if geno_ok else 0,
-        ]])
+        x = _build_feature_row(
+            p_tabular=float(p_tabular),
+            p_retina=p_retina,
+            retina_ok=retina_ok,
+            p_skin=p_skin,
+            skin_ok=skin_ok,
+            p_genomics=p_genomics,
+            geno_ok=geno_ok,
+            feature_names=bundle.get("features") or None,
+        )
         proba = float(est.predict_proba(x)[:,1][0])
         reason = "fusion"
     except Exception:

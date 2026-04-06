@@ -4,6 +4,8 @@ import re
 import numpy as np
 import pandas as pd
 from joblib import load
+from app.ml.artifacts import ensure_artifact_file, infer_repo_relative_artifact_path, resolve_artifact_path
+from app.services.screening_program import derive_tabular_features
 try:
     import shap
 except Exception:
@@ -22,6 +24,7 @@ _cached = {
     "explainer": None,
     "feature_cols": None,
     "model_feature_cols": None,
+    "numeric_feature_cols": None,
     "classes": None,
     "target_idx": None,
 }
@@ -57,18 +60,22 @@ def load_registry():
 def _resolve_model_path(path: str) -> str:
     if not path:
         return ""
-    if os.path.isabs(path):
-        return path
-    # If path starts with "backend/...", resolve from project root.
-    if path == "backend" or path.startswith(f"backend{os.sep}"):
-        return os.path.join(PROJECT_ROOT, path)
-    return os.path.join(REPO_ROOT, path)
+    return resolve_artifact_path(
+        path,
+        repo_root=REPO_ROOT,
+        project_root=PROJECT_ROOT,
+        artifact_dir=ART_DIR,
+    )
 
 def get_model():
     if _cached["model"] is None:
         reg = load_registry()
         _cached["meta"] = reg
         model_path = _resolve_model_path(reg["model_path"])
+        model_path = ensure_artifact_file(
+            model_path,
+            repo_relative_path=infer_repo_relative_artifact_path(reg.get("model_path", "")),
+        )
         _cached["meta"]["model_path"] = model_path
         _cached["model"] = load(model_path)
         # infer feature columns from modelcard if available
@@ -88,6 +95,20 @@ def get_model():
                     _cached["model_feature_cols"] = names
             except Exception:
                 pass
+        preprocess = None
+        try:
+            base_estimator = getattr(_cached["model"], "estimator", None)
+            if base_estimator is None and getattr(_cached["model"], "calibrated_classifiers_", None):
+                base_estimator = getattr(_cached["model"].calibrated_classifiers_[0], "estimator", None)
+            named_steps = getattr(base_estimator, "named_steps", {}) or {}
+            preprocess = named_steps.get("preprocess") or named_steps.get("pre")
+        except Exception:
+            preprocess = None
+        if preprocess is not None:
+            for name, _transformer, cols in getattr(preprocess, "transformers_", []):
+                if name == "num":
+                    _cached["numeric_feature_cols"] = list(cols)
+                    break
         if _cached["classes"] is None and hasattr(_cached["model"], "classes_"):
             _cached["classes"] = [str(c) for c in _cached["model"].classes_]
     return _cached["model"], _cached["meta"]
@@ -106,8 +127,33 @@ def _coerce_payload_value(payload: dict, key):
         pass
     return np.nan
 
+
+def _coerce_numeric_feature(value):
+    if value in ("", None):
+        return np.nan
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if not text:
+            return np.nan
+        if text in {"yes", "true", "y", "1"}:
+            return 1.0
+        if text in {"no", "false", "n", "0"}:
+            return 0.0
+        try:
+            return float(text)
+        except Exception:
+            return np.nan
+    if isinstance(value, bool):
+        return float(value)
+    try:
+        return float(value)
+    except Exception:
+        return np.nan
+
+
 def build_input_df(payload: dict) -> pd.DataFrame:
     model, meta = get_model()
+    payload = derive_tabular_features(payload)
     # Use estimator feature schema first when available. Some artifacts can
     # drift from model card fields and include numeric column keys (e.g., 118).
     feature_cols = _cached["model_feature_cols"] or _cached["feature_cols"] or list(payload.keys())
@@ -121,6 +167,9 @@ def build_input_df(payload: dict) -> pd.DataFrame:
             row["pulse_pressure"] = sbp - dbp
         except Exception:
             pass
+    for feature in _cached.get("numeric_feature_cols") or []:
+        if feature in row:
+            row[feature] = _coerce_numeric_feature(row[feature])
     return pd.DataFrame([row])
 
 def _predict_proba_safe(model, X: pd.DataFrame):

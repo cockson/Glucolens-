@@ -8,7 +8,7 @@ from app.ml.retina.quality import quality_check_rgb_uint8, pil_to_rgb_uint8
 import torch
 from torchvision import transforms
 
-from app.ml.artifacts import resolve_artifact_path
+from app.ml.artifacts import ensure_artifact_file, infer_repo_relative_artifact_path, resolve_artifact_path
 from app.ml.retina.model import build_retina_model
 from app.ml.retina.gradcam import GradCAM, overlay_cam_on_image
 
@@ -44,7 +44,12 @@ def _load_registry():
 def get_bundle():
     if _cached["bundle"] is None:
         reg = _load_registry()
-        _cached["bundle"] = load(_resolve_model_path(reg["model_path"]))
+        model_path = _resolve_model_path(reg["model_path"])
+        model_path = ensure_artifact_file(
+            model_path,
+            repo_relative_path=infer_repo_relative_artifact_path(reg.get("model_path", "")),
+        )
+        _cached["bundle"] = load(model_path)
     return _cached["bundle"]
 
 def get_model():

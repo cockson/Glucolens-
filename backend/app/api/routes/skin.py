@@ -10,6 +10,7 @@ from app.api.deps_billing import require_active_subscription
 
 from app.ml.skin.serve import predict_skin, load_model_card, load_performance
 from app.ml.skin.report import render_skin_report_pdf
+from app.services.prediction_records import save_prediction_record
 
 router = APIRouter()
 def _uuid(): return str(uuid.uuid4())
@@ -46,7 +47,8 @@ def skin_predict(
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=f"skin_model_unavailable: {str(e)}")
 
-    rec = PredictionRecord(
+    prediction_id = save_prediction_record(
+        db,
         id=_uuid(),
         actor_user_id=user.id,
         org_id=user.org_id,
@@ -62,9 +64,7 @@ def skin_predict(
         predicted_label=result["predicted_label"],
         proba_json=json.dumps(result["probabilities"], sort_keys=True),
     )
-    db.add(rec); db.commit()
-
-    result["prediction_id"] = rec.id
+    result["prediction_id"] = prediction_id
     return result
 
 @router.get("/report/{prediction_id}")

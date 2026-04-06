@@ -18,6 +18,8 @@ from app.core.thresholds import DEFAULT_FUSION_THRESHOLD, COUNTRY_THRESHOLDS
 from fastapi.responses import StreamingResponse
 from app.ml.fusion.report import render_fusion_report_pdf
 from app.db.models import ThresholdPolicy
+from app.services.prediction_records import save_prediction_record
+from app.services.screening_program import build_screening_plan, derive_tabular_features
 
 
 router = APIRouter()
@@ -101,9 +103,10 @@ def fusion_predict_endpoint(
         raise HTTPException(status_code=400, detail="payload must be valid JSON")
     if not isinstance(payload_obj, dict):
         raise HTTPException(status_code=400, detail="payload must be a JSON object")
-    tabular_inputs = {k: v for k, v in payload_obj.items() if k != "genomics"}
+    tabular_inputs = derive_tabular_features({k: v for k, v in payload_obj.items() if k != "genomics"})
     genomics_inputs = payload_obj.get("genomics") if isinstance(payload_obj.get("genomics"), dict) else None
 
+    prediction_id = None
     try:
         try:
             tab = predict_tabular(payload_obj)
@@ -168,9 +171,15 @@ def fusion_predict_endpoint(
             "retina": retina_out,
             "skin": skin_out,
             "genomics": genomics_out,
+            "screening_plan": build_screening_plan(
+                fusion=fused,
+                tabular=tab,
+                threshold=thr,
+            ),
         }
 
-        rec = PredictionRecord(
+        prediction_id = save_prediction_record(
+            db,
             id=_uuid(),
             actor_user_id=user.id,
             org_id=user.org_id,
@@ -195,8 +204,6 @@ def fusion_predict_endpoint(
             predicted_label=fused["final_label"],
             proba_json=json.dumps({"fusion": fused.get("final_proba")}, sort_keys=True),
         )
-        db.add(rec)
-        db.commit()
     except HTTPException:
         raise
     except FileNotFoundError as e:
@@ -214,7 +221,7 @@ def fusion_predict_endpoint(
             pass
         raise HTTPException(status_code=500, detail=detail)
 
-    out["prediction_id"] = rec.id
+    out["prediction_id"] = prediction_id
     return out
 
 

@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 
 from joblib import dump
+from app.services.screening_program import derive_tabular_features
 
 from sklearn.model_selection import StratifiedKFold, RandomizedSearchCV
 from sklearn.pipeline import Pipeline
@@ -105,13 +106,10 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-    # Keep WHR only if already present (or aliased from source columns like waist_hip_ratio).
-    if "pulse_pressure" not in df.columns and {"systolic_bp", "diastolic_bp"}.issubset(df.columns):
-        sbp = pd.to_numeric(df["systolic_bp"], errors="coerce")
-        dbp = pd.to_numeric(df["diastolic_bp"], errors="coerce")
-        df["pulse_pressure"] = sbp - dbp
-    return df
+    enriched_rows = []
+    for row in df.to_dict(orient="records"):
+        enriched_rows.append(derive_tabular_features(row))
+    return pd.DataFrame(enriched_rows, columns=pd.Index(df.columns).union(FEATURES).tolist())
 
 # -------- DeLong AUROC CI (OOF) --------
 def _compute_midrank(x):
@@ -567,10 +565,11 @@ def main(csv_path: str):
     model_name = f"tabular_{best['name']}_cal_{best['calibration']}_smote_{int(best['use_smote'])}"
     model_path = os.path.join(ART_DIR, f"{model_name}_{version}.joblib")
     dump(best["final_model"], model_path)
+    model_ref = os.path.relpath(model_path, REPO_ROOT).replace(os.sep, "/")
 
     # Performance outputs
     perf = {
-        "current": {"model_name": model_name, "model_version": version, "model_path": model_path},
+        "current": {"model_name": model_name, "model_version": version, "model_path": model_ref},
         "train_summary": {
             "n_total": int(len(df)),
             "n_train": int(len(X_train)),
@@ -635,15 +634,17 @@ def main(csv_path: str):
 
     comp_csv = os.path.join(ART_DIR, "comparison.csv")
     pd.DataFrame(rows).to_csv(comp_csv, index=False)
+    performance_ref = os.path.relpath(performance_path, REPO_ROOT).replace(os.sep, "/")
+    comparison_ref = os.path.relpath(comp_csv, REPO_ROOT).replace(os.sep, "/")
 
     # Registry pointer
     registry = {
         "current": {
             "model_name": model_name,
             "model_version": version,
-            "model_path": model_path,
-            "performance_path": performance_path,
-            "comparison_csv": comp_csv,
+            "model_path": model_ref,
+            "performance_path": performance_ref,
+            "comparison_csv": comparison_ref,
         }
     }
     registry_path = os.path.join(ART_DIR, "registry.json")

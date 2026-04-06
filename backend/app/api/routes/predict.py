@@ -1,23 +1,36 @@
-import uuid
 import json
-from fastapi import APIRouter, Depends, Request, HTTPException
+import uuid
+from fastapi import APIRouter, Depends, Request, Response, HTTPException
 from fastapi_limiter.depends import RateLimiter
+from fastapi_limiter import FastAPILimiter
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.db.models import PredictionRecord, User
+from app.db.models import User
 from app.api.deps_billing import require_active_subscription
 from app.api.deps import get_current_user
 from app.ml.tabular.serve import predict_with_explain
 from fastapi.responses import StreamingResponse
 from app.ml.tabular.serve import load_model_card, load_performance
 from app.ml.tabular.report import render_tabular_report_pdf
-from app.db.models import Role
+from app.core.config import settings
+from app.services.prediction_records import save_prediction_record
 
 router = APIRouter()
 
 def _uuid() -> str:
     return str(uuid.uuid4())
+
+
+def _optional_rate_limit(times: int, seconds: int):
+    limiter = RateLimiter(times=times, seconds=seconds)
+
+    async def _dependency(request: Request, response: Response):
+        if not settings.REDIS_URL or getattr(FastAPILimiter, "redis", None) is None:
+            return None
+        return await limiter(request, response)
+
+    return Depends(_dependency)
 
 
 def _predict_and_store(payload: dict, db: Session, user: User):
@@ -26,7 +39,8 @@ def _predict_and_store(payload: dict, db: Session, user: User):
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=f"tabular_model_unavailable: {str(e)}")
 
-    rec = PredictionRecord(
+    prediction_id = save_prediction_record(
+        db,
         id=_uuid(),
         actor_user_id=user.id,
         org_id=user.org_id,
@@ -42,9 +56,7 @@ def _predict_and_store(payload: dict, db: Session, user: User):
         predicted_label=result["predicted_label"],
         proba_json=json.dumps(result["probabilities"], sort_keys=True),
     )
-    db.add(rec)
-    db.commit()
-    result["prediction_id"] = rec.id
+    result["prediction_id"] = prediction_id
     return result
 
 
@@ -57,7 +69,7 @@ def tabular_model_card(user: User = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.post("/tabular/public", dependencies=[Depends(RateLimiter(times=5, seconds=60))])
+@router.post("/tabular/public", dependencies=[_optional_rate_limit(times=5, seconds=60)])
 def predict_tabular_public(
     request: Request,
     payload: dict,
@@ -73,7 +85,7 @@ def predict_tabular_public(
     return _predict_and_store(payload=payload, db=db, user=user)
 
 
-@router.post("/tabular", dependencies=[Depends(RateLimiter(times=60, seconds=60))])
+@router.post("/tabular", dependencies=[_optional_rate_limit(times=60, seconds=60)])
 def predict_tabular(
     request: Request,
     payload: dict,

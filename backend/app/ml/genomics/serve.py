@@ -1,7 +1,7 @@
 import json, os
 import pandas as pd
 from joblib import load
-from app.ml.artifacts import resolve_artifact_path
+from app.ml.artifacts import ensure_artifact_file, infer_repo_relative_artifact_path, resolve_artifact_path
 from app.ml.genomics.prepare_genomics import prepare_genomics
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -45,7 +45,12 @@ def get_model():
     art = _find_art_dir()
     with open(os.path.join(art, "registry.json"), "r", encoding="utf-8") as f:
         path = json.load(f)["current"]["model_path"]
-    return load(_resolve_model_path(path))
+    model_path = _resolve_model_path(path)
+    model_path = ensure_artifact_file(
+        model_path,
+        repo_relative_path=infer_repo_relative_artifact_path(path),
+    )
+    return load(model_path)
 
 
 def _extract_coefficients(estimator):
