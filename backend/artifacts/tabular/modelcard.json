@@ -1,12 +1,13 @@
 {
-  "model_name": "tabular_rf_cal_sigmoid_smote_1",
-  "model_version": "20260301_042231",
+  "model_name": "tabular_rf_cal_sigmoid_smote_0",
+  "model_version": "20260518_130427",
   "classes": [
     "non_diabetic",
     "prediabetic",
     "diabetic"
   ],
   "target_index_diabetic": 2,
+  "target_design": "current_screening_classifier",
   "features": [
     "age",
     "sex",
@@ -23,8 +24,6 @@
     "family_history_diabetes",
     "family_history_cvd",
     "hypertension_status",
-    "fasting_glucose_mgdl",
-    "hba1c_pct",
     "total_cholesterol_mgdl",
     "hdl_mgdl",
     "ldl_mgdl",
@@ -34,27 +33,35 @@
     "on_antihypertensive",
     "on_statin"
   ],
+  "leakage_policy": {
+    "excluded_diagnostic_features": [
+      "fasting_glucose_mgdl",
+      "hba1c_pct",
+      "on_antidiabetic"
+    ],
+    "reason": "The tabular target is a current screening class. Diagnostic labs or treatment markers can directly encode that class, so they are collected for clinical context/reporting but excluded from model training features."
+  },
   "pipeline": {
     "preprocess": "median impute + scale numeric; most_frequent impute + onehot categorical",
-    "imbalance": "SMOTE inside CV",
+    "imbalance": "class_weight/balanced only",
     "tuning": "RandomizedSearchCV inner loop (nested CV)",
     "calibration": "sigmoid"
   },
   "metrics_oof": {
-    "auroc": 0.9990548766163342,
+    "auroc": 0.8877058301103963,
     "auroc_95ci": null,
-    "auprc_diabetic_vs_rest": 0.9989729448730229,
-    "brier": 0.02181935149639948,
-    "ece_diabetic_vs_rest": 0.002340165379964391,
-    "cal_slope_diabetic_vs_rest": 1.1730434151930171,
-    "cal_intercept_diabetic_vs_rest": 0.5299709756738781,
-    "accuracy": 0.98695,
-    "f1": 0.9870089104901459,
-    "log_loss": 0.04662450472922783
+    "auprc_diabetic_vs_rest": 0.967275922826348,
+    "brier": 0.35596114046239324,
+    "ece_diabetic_vs_rest": 0.030558847302367697,
+    "cal_slope_diabetic_vs_rest": 1.3013079581270672,
+    "cal_intercept_diabetic_vs_rest": 0.12344061338080219,
+    "accuracy": 0.72975,
+    "f1": 0.7294812404642831,
+    "log_loss": 0.5778001449905092
   },
   "external_validation": null,
   "dca": "Saved in performance.json comparisons[*].dca",
-  "created_at_utc": "2026-03-01T04:22:34.789665Z",
+  "created_at_utc": "2026-05-18T13:04:33.150365Z",
   "limitations": [
     "Primary clinical thresholding remains focused on diabetic-vs-rest risk.",
     "Synthetic dataset may not generalize to real clinics; use site-held-out external validation with real data next."

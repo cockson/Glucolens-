@@ -68,6 +68,67 @@ def _derive_cvd_risk_category(value: float | None) -> str | None:
     return "high"
 
 
+def build_screening_risk_horizons(probability: float | None) -> dict[str, Any]:
+    """
+    Convert a calibrated current screening probability into operational 3/6/12 month
+    follow-up bands.
+
+    This deliberately does not expose horizon-specific event probabilities: the
+    current artifacts are screening classifiers, not time-to-event models trained
+    with dated 3/6/12 month outcomes.
+    """
+    p = _to_float(probability)
+    horizons = [
+        (3, 0.62, 0.35),
+        (6, 0.45, 0.22),
+        (12, 0.30, 0.12),
+    ]
+    if p is None:
+        return {
+            "basis": "unavailable",
+            "target_design": "current_screening_classifier",
+            "items": [
+                {
+                    "window_months": months,
+                    "screening_probability": None,
+                    "risk": None,
+                    "risk_band": "unknown",
+                    "estimated_event_risk": None,
+                }
+                for months, _high, _intermediate in horizons
+            ],
+        }
+
+    items = []
+    for months, high_cutoff, intermediate_cutoff in horizons:
+        if p >= high_cutoff:
+            band = "high"
+        elif p >= intermediate_cutoff:
+            band = "intermediate"
+        else:
+            band = "low"
+        items.append(
+            {
+                "window_months": months,
+                "screening_probability": p,
+                "risk": p,
+                "risk_band": band,
+                "estimated_event_risk": None,
+                "thresholds": {
+                    "intermediate": intermediate_cutoff,
+                    "high": high_cutoff,
+                },
+            }
+        )
+
+    return {
+        "basis": "operational_follow_up_from_current_screening_probability",
+        "target_design": "current_screening_classifier",
+        "items": items,
+        "limitations": "Follow-up bands are derived from the calibrated current screening probability; train separate models with dated longitudinal outcomes for true 3/6/12 month incidence prediction.",
+    }
+
+
 def derive_tabular_features(payload: dict[str, Any]) -> dict[str, Any]:
     enriched = dict(payload or {})
 
@@ -195,6 +256,7 @@ def build_screening_plan(
         "recommended_window_months": recommended_window,
         "track": track,
         "summary": summary,
+        "risk_horizons": build_screening_risk_horizons(final_proba),
         "timelines": timelines,
         "generated_on": today.isoformat(),
     }

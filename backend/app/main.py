@@ -15,7 +15,6 @@ from fastapi_limiter import FastAPILimiter
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.api.routes import retina
 from app.gpt.router import router as gpt_router
-from app.ml.tabular.serve import get_model_status, start_model_warmup
 from urllib.parse import urlsplit
 
 
@@ -104,7 +103,7 @@ app.add_middleware(
 # --- Health ---
 @app.get("/health")
 def health():
-    return {"status": "ok", "env": settings.ENV, "tabular_model": get_model_status()}
+    return {"status": "ok", "env": settings.ENV}
 
 
 
@@ -120,8 +119,6 @@ async def on_startup():
             await FastAPILimiter.init(r)
         except Exception as exc:
             print(f"Rate limiter disabled: {exc}")
-
-    start_model_warmup()
 
 
 # --- Routers ---

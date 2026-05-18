@@ -14,6 +14,7 @@ dist/
 
 # ML artifacts
 backend/backend/artifacts/tabular/tabular_rf_cal_sigmoid_smote_0_20260225_175331.joblib
+backend/artifacts/tabular/tabular_rf_cal_sigmoid_smote_0_20260518_130427.joblib
 
 # OS
 .DS_Store

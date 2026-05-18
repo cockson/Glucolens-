@@ -283,6 +283,9 @@ export default function TabularScreening() {
                 <input className="input" type="number" min="3" max="20" step="0.1" inputMode="decimal" value={form.hba1c_pct} onChange={(e) => set("hba1c_pct", e.target.value)} placeholder="6.2 (3-20)" />
               </div>
             </div>
+            <p className="small" style={{ marginTop: 8 }}>
+              Diagnostic labs are included in the report but excluded from model scoring to avoid leakage.
+            </p>
 
             <div style={{ height: 10 }} />
 
@@ -352,6 +355,18 @@ export default function TabularScreening() {
                         ? "Intermediate-risk case. Prioritize lifestyle intervention and near-term confirmatory testing."
                         : "Lower-risk case. Consider age, symptoms, and comorbid factors before deferring confirmatory testing.")}
                   </p>
+                </div>
+
+                <div className="card" style={{ marginTop: 10 }}>
+                  <b>3 / 6 / 12-Month Follow-Up Bands</b>
+                  <div className="small" style={{ marginTop: 8 }}>
+                    {(result.risk_horizons?.items || []).map((item) => (
+                      <div key={item.window_months} style={{ marginBottom: 6 }}>
+                        {item.window_months} months: <b>{item.risk_band}</b>
+                        {item.screening_probability === null || item.screening_probability === undefined ? "" : ` (screening p=${Number(item.screening_probability).toFixed(3)})`}
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="card" style={{ marginTop: 10 }}>

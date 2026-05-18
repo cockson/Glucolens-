@@ -39,8 +39,6 @@ def _fallback_tabular(payload_obj: dict, reason: str):
     # Deterministic heuristic fallback to avoid hard 500 when model schema drifts.
     age = _to_float(payload_obj.get("age"))
     bmi = _to_float(payload_obj.get("bmi"))
-    fpg = _to_float(payload_obj.get("fasting_glucose_mgdl"))
-    hba1c = _to_float(payload_obj.get("hba1c_pct"))
     sbp = _to_float(payload_obj.get("systolic_bp"))
     dbp = _to_float(payload_obj.get("diastolic_bp"))
     fam = str(payload_obj.get("family_history_diabetes", "")).strip().lower() in {"1", "true", "yes", "y"}
@@ -48,8 +46,6 @@ def _fallback_tabular(payload_obj: dict, reason: str):
     score = 0.08
     if age is not None: score += min(max((age - 35.0) / 150.0, 0.0), 0.25)
     if bmi is not None: score += min(max((bmi - 24.0) / 80.0, 0.0), 0.25)
-    if fpg is not None: score += min(max((fpg - 95.0) / 220.0, 0.0), 0.35)
-    if hba1c is not None: score += min(max((hba1c - 5.4) / 8.0, 0.0), 0.35)
     if sbp is not None and dbp is not None:
         pp = sbp - dbp
         score += min(max((pp - 40.0) / 120.0, 0.0), 0.08)
@@ -69,6 +65,7 @@ def _fallback_tabular(payload_obj: dict, reason: str):
             "t2d": p_t2d,
         },
         "fallback_reason": reason,
+        "leakage_policy": "fallback excludes fasting glucose and HbA1c diagnostic fields",
     }
 
 @router.get("/model-card")

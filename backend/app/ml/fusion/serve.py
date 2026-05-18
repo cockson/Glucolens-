@@ -2,6 +2,7 @@ import os, json
 import numpy as np
 from joblib import load
 from app.ml.artifacts import ensure_artifact_file, infer_repo_relative_artifact_path, resolve_artifact_path
+from app.services.screening_program import build_screening_risk_horizons
 
 # Resolve paths relative to backend repo root regardless of cwd.
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -48,6 +49,12 @@ def load_model_card():
     Fusion currently stores registry/performance and bundled metadata.
     Build a model-card-like response from these artifacts.
     """
+    fusion_dir = _find_fusion_dir()
+    card_path = os.path.join(fusion_dir, "modelcard.json")
+    if os.path.isfile(card_path):
+        with open(card_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
     reg = _load_registry()
     bundle = get_fusion_bundle()
     perf = load_performance().get("performance", {})
@@ -57,6 +64,14 @@ def load_model_card():
         "classes": bundle.get("classes", ["screen_negative", "screen_positive_refer"]),
         "features": bundle.get("features", []),
         "calibration": bundle.get("calibration", perf.get("calibration", "unknown")),
+        "screening_follow_up_windows": (
+            bundle.get("screening_follow_up_windows")
+            or perf.get("screening_follow_up_windows")
+            or bundle.get("screening_horizons")
+            or perf.get("screening_horizons")
+        ),
+        "target_design": bundle.get("target_design") or perf.get("target_design") or "current_screening_classifier",
+        "horizon_training_note": bundle.get("horizon_training_note") or perf.get("horizon_training_note"),
         "metrics_summary": perf.get("metrics_summary"),
         "metrics_holdout": perf.get("metrics_holdout"),
         "metrics_train": perf.get("metrics_train"),
@@ -94,12 +109,17 @@ def _build_feature_row(
         "geno_ok": 1 if geno_ok else 0,
     }
     active_probs = np.array(
-        [row["p_tabular"], row["p_retina_eff"], row["p_skin_eff"], row["p_genomics_eff"]],
+        [
+            row["p_tabular"],
+            float(p_retina) if retina_ok and p_retina is not None else np.nan,
+            float(p_skin) if skin_ok and p_skin is not None else np.nan,
+            float(p_genomics) if geno_ok and p_genomics is not None else np.nan,
+        ],
         dtype=float,
     )
-    row["p_mean_active"] = float(active_probs.mean())
-    row["p_max_active"] = float(active_probs.max())
-    row["p_min_active"] = float(active_probs.min())
+    row["p_mean_active"] = float(np.nanmean(active_probs))
+    row["p_max_active"] = float(np.nanmax(active_probs))
+    row["p_min_active"] = float(np.nanmin(active_probs))
     row["p_range_active"] = float(row["p_max_active"] - row["p_min_active"])
     row["n_modalities_active"] = int(1 + row["retina_ok"] + row["skin_ok"] + row["geno_ok"])
     row["tab_retina_gap"] = float(abs(row["p_tabular"] - row["p_retina_eff"]))
@@ -142,14 +162,14 @@ def fusion_predict(
     - if confidence near threshold -> refer (conservative)
     """
     if p_tabular is None:
-        return {"final_label":"insufficient_data", "final_proba": None, "reason":"missing_tabular"}
+        return {"final_label":"insufficient_data", "final_proba": None, "reason":"missing_tabular", "risk_horizons": build_screening_risk_horizons(None)}
 
     if p_retina is not None and not retina_ok:
-        return {"final_label":"retake_image", "final_proba": None, "reason":"retina_quality_failed"}
+        return {"final_label":"retake_image", "final_proba": None, "reason":"retina_quality_failed", "risk_horizons": build_screening_risk_horizons(None)}
     if p_skin is not None and not skin_ok:
-        return {"final_label":"retake_image", "final_proba": None, "reason":"skin_quality_failed"}
+        return {"final_label":"retake_image", "final_proba": None, "reason":"skin_quality_failed", "risk_horizons": build_screening_risk_horizons(None)}
     if p_genomics is not None and not geno_ok:
-        return {"final_label":"retake_image", "final_proba": None, "reason":"genomics_quality_failed"}
+        return {"final_label":"retake_image", "final_proba": None, "reason":"genomics_quality_failed", "risk_horizons": build_screening_risk_horizons(None)}
 
     # If trained fusion artifacts are unavailable, degrade gracefully to tabular-only.
     try:
@@ -174,7 +194,17 @@ def fusion_predict(
     # Conservative abstain band near threshold
     band = 0.03
     if abs(proba - threshold) <= band:
-        return {"final_label":"screen_positive_refer", "final_proba": proba, "reason":"near_threshold_conservative"}
+        return {
+            "final_label":"screen_positive_refer",
+            "final_proba": proba,
+            "reason":"near_threshold_conservative",
+            "risk_horizons": build_screening_risk_horizons(proba),
+        }
 
     label = "screen_positive_refer" if proba >= threshold else "screen_negative"
-    return {"final_label": label, "final_proba": proba, "reason": reason}
+    return {
+        "final_label": label,
+        "final_proba": proba,
+        "reason": reason,
+        "risk_horizons": build_screening_risk_horizons(proba),
+    }

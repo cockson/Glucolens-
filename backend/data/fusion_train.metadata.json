@@ -1,0 +1,58 @@
+{
+  "source": "oof_tabular_non_leaky_diagnostic_fields_suppressed",
+  "input_csv": "data/anthropometric_data/train_tabular.csv",
+  "output_csv": "data/fusion_train.csv",
+  "requested_max_rows": 3000,
+  "rows_written": 3000,
+  "label_counts": {
+    "0": 2000,
+    "1": 1000
+  },
+  "tabular_oof_model": {
+    "estimator": "RandomForestClassifier",
+    "n_splits": 5,
+    "features": [
+      "age",
+      "sex",
+      "bmi",
+      "waist_circumference",
+      "systolic_bp",
+      "diastolic_bp",
+      "pulse_pressure",
+      "bmi_category",
+      "central_obesity",
+      "smoking_status",
+      "alcohol_use",
+      "physical_activity",
+      "family_history_diabetes",
+      "family_history_cvd",
+      "hypertension_status",
+      "total_cholesterol_mgdl",
+      "hdl_mgdl",
+      "ldl_mgdl",
+      "triglycerides_mgdl",
+      "cvd_risk_10yr_pct",
+      "cvd_risk_category",
+      "on_antihypertensive",
+      "on_statin"
+    ],
+    "leakage_exclusions": [
+      "diabetes",
+      "diabetes_dx",
+      "fasting_glucose_mgdl",
+      "hba1c_pct",
+      "label",
+      "on_antidiabetic"
+    ]
+  },
+  "optional_modalities": {
+    "retina": "unavailable",
+    "skin": "unavailable",
+    "genomics": "unavailable"
+  },
+  "notes": [
+    "Rows are generated from out-of-fold tabular predictions, so each probability comes from a model that did not train on that row.",
+    "Diagnostic leakage fields are suppressed before prediction.",
+    "Use real linked modality predictions when available; this file is a non-leaky tabular-only fusion training fallback."
+  ]
+}

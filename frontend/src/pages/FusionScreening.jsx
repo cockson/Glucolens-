@@ -23,10 +23,22 @@ export default function FusionScreening(){
     "MTNR1B_rs10830963",
     "SLC30A8_rs13266634",
     "PPARG_rs1801282",
-    "Age",
-    "BMI",
-    "HbA1c",
   ];
+
+  const isGenomicFeature = (feature) => {
+    const f = String(feature || "").trim().toLowerCase().replace(/[-\s]+/g, "_");
+    const clinical = new Set([
+      "age", "age_years", "patient_age", "bmi", "body_mass_index",
+      "hba1c", "hba1c_pct", "hba1c_percent",
+      "fasting_glucose", "fasting_glucose_mgdl", "fbg", "fbg_mgdl",
+      "glucose", "glucose_mgdl", "sex", "gender",
+      "waist", "waist_circumference", "waist_circumference_cm",
+      "systolic_bp", "diastolic_bp", "sbp", "dbp",
+    ]);
+    if (clinical.has(f)) return false;
+    if (/(^|_)hba1c($|_)|(^|_)(fasting_)?glucose($|_)|(^|_)fbg($|_)|(^|_)bmi($|_)|(^|_)(age|sex|gender)($|_)|(^|_)(waist|systolic|diastolic|sbp|dbp)($|_)/i.test(f)) return false;
+    return /(^rs\d+$|_rs\d+$|^prs_|_prs$|polygenic|genotype|snp)/i.test(f);
+  };
 
   const auth = getAuth();
   const isPublic = auth?.role === "public";
@@ -77,15 +89,6 @@ export default function FusionScreening(){
     if (f.includes("rs")) {
       return { min: 0, max: 2, step: 1, hint: "Expected range: 0-2 (genotype code)" };
     }
-    if (f === "age") {
-      return { min: 0, max: 120, step: 1, hint: "Expected range: 0-120 years" };
-    }
-    if (f === "bmi") {
-      return { min: 10, max: 80, step: 0.1, hint: "Expected range: 10-80 kg/m2" };
-    }
-    if (f === "hba1c" || f.includes("hba1c")) {
-      return { min: 3, max: 20, step: 0.1, hint: "Expected range: 3-20 %" };
-    }
     return { min: undefined, max: undefined, step: 0.01, hint: "Expected range: numeric value" };
   }
 
@@ -134,8 +137,9 @@ export default function FusionScreening(){
     api.get("/api/genomics/model-card")
       .then((r) => {
         if (!alive) return;
-        const feats = Array.isArray(r?.data?.features) && r.data.features.length
-          ? r.data.features
+        const modelFeatures = Array.isArray(r?.data?.features) ? r.data.features.filter(isGenomicFeature) : [];
+        const feats = modelFeatures.length
+          ? modelFeatures
           : DEFAULT_GENO_FEATURES;
         setGenomicsFeatures(feats);
         setGenomicsForm((prev) => {
@@ -416,6 +420,9 @@ export default function FusionScreening(){
               {fieldErrors.hba1c_pct && <div className="field-error">{fieldErrors.hba1c_pct}</div>}
             </div>
           </div>
+          <p className="small" style={{ marginTop: 8 }}>
+            Diagnostic labs are included in the report but excluded from model scoring to avoid leakage.
+          </p>
 
           <div className="row" style={{marginTop:10}}>
             <div>
@@ -539,6 +546,12 @@ export default function FusionScreening(){
                   Recommended window: <b>{result.screening_plan?.recommended_window_months || "N/A"} months</b><br/>
                   {result.screening_plan?.summary || "No screening plan available."}
                 </p>
+                {(result.fusion?.risk_horizons?.items || result.screening_plan?.risk_horizons?.items || []).map((item) => (
+                  <p key={`risk-${item.window_months}`} className="small" style={{ marginTop: 6 }}>
+                    <b>{item.window_months} months follow-up band:</b> {item.risk_band}
+                    {item.screening_probability === null || item.screening_probability === undefined ? "" : ` (screening p=${Number(item.screening_probability).toFixed(3)})`}
+                  </p>
+                ))}
                 {(result.screening_plan?.timelines || []).map((item) => (
                   <p key={item.window_months} className="small" style={{ marginTop: 6 }}>
                     <b>{item.window_months} months</b> ({item.due_date}): {item.status} - {item.note}

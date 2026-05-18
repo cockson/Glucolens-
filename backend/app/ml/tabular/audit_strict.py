@@ -3,9 +3,6 @@ import json
 import os
 from dataclasses import dataclass
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.calibration import calibration_curve
@@ -15,6 +12,13 @@ from sklearn.model_selection import GroupKFold, StratifiedKFold, cross_val_predi
 from sklearn.pipeline import Pipeline
 
 from app.ml.tabular import train_tabular_pro as tp
+
+try:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+except Exception:
+    plt = None
 
 
 @dataclass
@@ -62,6 +66,12 @@ def _build_X(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     all_missing = [c for c in X.columns if X[c].isna().all()]
     if all_missing:
         X = X.drop(columns=all_missing)
+    feature_cols = list(X.columns)
+    nums, cats = tp.infer_feature_types(X, feature_cols)
+    for c in nums:
+        X[c] = pd.to_numeric(X[c], errors="coerce")
+    for c in cats:
+        X[c] = X[c].astype("object").where(X[c].isna(), X[c].astype(str))
     return X, list(X.columns)
 
 
@@ -179,6 +189,8 @@ def _duplicate_checks(ctx: AuditContext) -> dict:
 
 
 def _plot_calibration(y: np.ndarray, p: np.ndarray, out_png: str, title: str):
+    if plt is None:
+        return None
     frac_pos, mean_pred = calibration_curve(y, p, n_bins=10, strategy="quantile")
     fig, ax = plt.subplots(1, 2, figsize=(11, 4))
     ax[0].plot([0, 1], [0, 1], "--", color="#777")
@@ -197,6 +209,7 @@ def _plot_calibration(y: np.ndarray, p: np.ndarray, out_png: str, title: str):
     fig.tight_layout()
     fig.savefig(out_png, dpi=150)
     plt.close(fig)
+    return out_png
 
 
 def run_audit(
@@ -234,11 +247,12 @@ def run_audit(
         patient_report = _group_split_auc(pipe, ctx.X, ctx.y, ctx.df[patient_col])
 
     leak_keyword_hits = _keyword_leak_scan(list(ctx.df.columns))
+    feature_keyword_hits = _keyword_leak_scan(ctx.feature_cols)
     perfect_predictors = _perfect_predictor_scan(ctx)
     dup = _duplicate_checks(ctx)
 
     cal_png = os.path.join(output_dir, "calibration_oof.png")
-    _plot_calibration(ctx.y, p_true, cal_png, "OOF")
+    cal_plot = _plot_calibration(ctx.y, p_true, cal_png, "OOF")
 
     failures = []
     warnings = []
@@ -283,11 +297,14 @@ def run_audit(
                 + ", ".join([f"{x['feature']}(support={x['max_support']}, bins={x['n_perfect_bins']})" for x in severe[:5]])
             )
 
-    # Ignore known target col itself if present; still flag others.
-    bad_keyword_hits = [c for c in leak_keyword_hits if c != target_col]
-    if bad_keyword_hits:
-        warnings.append(f"Leakage-like column names detected: {bad_keyword_hits[:10]}")
-        failures.append(f"Hard leakage-like column names detected: {bad_keyword_hits[:10]}")
+    # Source files may contain target/helper/diagnostic columns. Fail only if
+    # such columns enter the audited feature set; otherwise report as excluded.
+    allowed_source_columns = {target_col, "diabetic_status", "label", *tp.LEAKY_COLS}
+    source_only_hits = [c for c in leak_keyword_hits if c not in allowed_source_columns]
+    if source_only_hits:
+        warnings.append(f"Leakage-like source columns detected and excluded: {source_only_hits[:10]}")
+    if feature_keyword_hits:
+        failures.append(f"Hard leakage-like feature columns detected: {feature_keyword_hits[:10]}")
 
     report = {
         "status": "fail" if failures else "pass",
@@ -299,7 +316,9 @@ def run_audit(
             "auroc_label_shuffle": float(auc_shuffle),
         },
         "leak_checks": {
-            "keyword_hits": bad_keyword_hits,
+            "keyword_hits": source_only_hits,
+            "feature_keyword_hits": feature_keyword_hits,
+            "excluded_source_columns": sorted(set(leak_keyword_hits) & allowed_source_columns),
             "perfect_predictor_candidates": perfect_predictors[:25],
             "duplicates": dup,
         },
@@ -307,7 +326,7 @@ def run_audit(
             "site": site_report,
             "patient": patient_report,
         },
-        "calibration_plot": os.path.basename(cal_png),
+        "calibration_plot": os.path.basename(cal_plot) if cal_plot else None,
         "warnings": warnings,
         "failures": failures,
     }

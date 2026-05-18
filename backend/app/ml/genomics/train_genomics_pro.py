@@ -9,7 +9,7 @@ from sklearn.metrics import roc_auc_score, brier_score_loss
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from app.ml.genomics.prepare_genomics import prepare_genomics
+from app.ml.genomics.prepare_genomics import is_clinical_overlap_feature, prepare_genomics
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 ART = os.path.join(REPO_ROOT, "artifacts", "genomics")
@@ -53,7 +53,12 @@ def _extract_label(df: pd.DataFrame) -> tuple[np.ndarray, pd.DataFrame]:
 def main():
     df = pd.read_csv("data/genomics/train.csv")
     y, x_df = _extract_label(df)
+    raw_feature_cols = list(x_df.columns)
     X = prepare_genomics(x_df)
+    dropped_overlap = [
+        c for c in raw_feature_cols
+        if is_clinical_overlap_feature(str(c))
+    ]
 
     uniq, counts = np.unique(y, return_counts=True)
     if len(uniq) < 2:
@@ -116,7 +121,13 @@ def main():
 
     version = dt.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     path = os.path.join(ART, f"genomics_{version}.joblib")
-    dump({"estimator":final, "features":list(X.columns), "calibration": calibration_method if final_cv >= 2 else "none"}, path)
+    dump({
+        "estimator": final,
+        "features": list(X.columns),
+        "calibration": calibration_method if final_cv >= 2 else "none",
+        "feature_policy": "genomic_only_no_anthropometric_overlap",
+        "dropped_overlap_features": dropped_overlap,
+    }, path)
 
     with open(f"{ART}/registry.json","w", encoding="utf-8") as f:
         model_ref = os.path.relpath(path, REPO_ROOT).replace(os.sep, "/")
@@ -136,7 +147,12 @@ def main():
         "model_version": version,
         "task": "binary classification",
         "target": "diabetes_proxy_positive",
+        "feature_policy": "genomic_only_no_anthropometric_overlap",
         "features": list(X.columns),
+        "excluded_features": {
+            "reason": "Removed anthropometric/clinical overlap from genomics model to avoid duplicated signal and leakage.",
+            "columns": dropped_overlap,
+        },
         "calibration": calibration_method if final_cv >= 2 else "none",
         "training": {
             "n_samples": int(len(y)),

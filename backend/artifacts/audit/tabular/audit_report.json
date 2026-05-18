@@ -1,0 +1,65 @@
+{
+  "status": "pass",
+  "summary": {
+    "n_rows": 20000,
+    "n_features": 23,
+    "positive_rate": 0.32215,
+    "auroc_oof": 0.959773721020018,
+    "auroc_label_shuffle": 0.5106093115093485
+  },
+  "leak_checks": {
+    "keyword_hits": [],
+    "feature_keyword_hits": [],
+    "excluded_source_columns": [
+      "label",
+      "on_antidiabetic"
+    ],
+    "perfect_predictor_candidates": [
+      {
+        "feature": "hdl_mgdl",
+        "max_support": 103,
+        "n_perfect_bins": 8
+      },
+      {
+        "feature": "ldl_mgdl",
+        "max_support": 92,
+        "n_perfect_bins": 18
+      }
+    ],
+    "duplicates": {
+      "duplicate_row_count": 2,
+      "duplicate_row_rate": 0.0001,
+      "conflicting_label_groups": 0
+    }
+  },
+  "group_split_validation": {
+    "site": {
+      "available": true,
+      "n_groups": 2,
+      "n_splits": 2,
+      "auroc_mean": 0.9573744937232627,
+      "auroc_std": 0.006692929531402825,
+      "folds": [
+        {
+          "fold": 1,
+          "auroc": 0.9640674232546654,
+          "reason": "ok"
+        },
+        {
+          "fold": 2,
+          "auroc": 0.9506815641918598,
+          "reason": "ok"
+        }
+      ]
+    },
+    "patient": {
+      "available": false,
+      "reason": "patient_col_missing"
+    }
+  },
+  "calibration_plot": null,
+  "warnings": [
+    "Potential perfect-predictor bins detected in 2 feature(s)."
+  ],
+  "failures": []
+}

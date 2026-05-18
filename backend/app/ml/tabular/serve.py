@@ -12,7 +12,7 @@ from app.ml.artifacts import (
     is_git_lfs_pointer,
     resolve_artifact_path,
 )
-from app.services.screening_program import derive_tabular_features
+from app.services.screening_program import build_screening_risk_horizons, derive_tabular_features
 try:
     import shap
 except Exception:
@@ -36,6 +36,7 @@ _cached = {
     "target_idx": None,
 }
 EXPLAIN_METHOD = os.getenv("TABULAR_EXPLAIN_METHOD", "occlusion").strip().lower()
+DIAGNOSTIC_LEAKAGE_FEATURES = {"fasting_glucose_mgdl", "hba1c_pct", "on_antidiabetic"}
 _model_lock = threading.Lock()
 _warmup_lock = threading.Lock()
 _warmup_thread: threading.Thread | None = None
@@ -419,6 +420,9 @@ def build_input_df(payload: dict) -> pd.DataFrame:
     feature_cols = _cached["model_feature_cols"] or _cached["feature_cols"] or list(payload.keys())
 
     row = {c: _coerce_payload_value(payload, c) for c in feature_cols}
+    for feature in DIAGNOSTIC_LEAKAGE_FEATURES:
+        if feature in row:
+            row[feature] = np.nan
     # Helpful derived feature when expected by model.
     if "pulse_pressure" in row and (pd.isna(row["pulse_pressure"]) or row["pulse_pressure"] in ("", None)):
         try:
@@ -555,6 +559,7 @@ def predict_tabular(payload: dict):
         "model_version": meta["model_version"],
         "predicted_label": predicted_label,
         "probabilities": probs,
+        "risk_horizons": build_screening_risk_horizons(p_t2d),
     }
 
 def predict_with_explain(payload: dict, max_features: int = 10):
@@ -597,6 +602,7 @@ def predict_with_explain(payload: dict, max_features: int = 10):
         "model_version": meta["model_version"],
         "predicted_label": predicted_label,
         "probabilities": {**{class_names[i]: float(proba[i]) for i in range(len(class_names))}, "t2d": p_t2d},
+        "risk_horizons": build_screening_risk_horizons(p_t2d),
         "explainability": {"method": explain_method, "top_features": shap_top},
     }
 

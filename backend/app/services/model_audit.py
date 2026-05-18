@@ -59,9 +59,10 @@ def build_model_audit() -> dict[str, Any]:
             "rationale": [
                 "Best fit for program-level screening because it degrades gracefully to tabular-only operation.",
                 "Accepts optional retina, skin, and genomics evidence without blocking the base screening pathway.",
+                "Current local fusion training uses out-of-fold tabular probabilities to avoid in-sample base-model leakage.",
             ],
             "risks": [
-                "Perfect or near-perfect holdout metrics suggest the current fusion dataset is too easy or not clinically representative.",
+                "Strong holdout metrics still come from a tabular-only local surrogate export, not real linked multimodal outcomes.",
                 "Fusion still depends on the validity of the underlying tabular signal.",
             ],
         },
@@ -119,7 +120,7 @@ def build_model_audit() -> dict[str, Any]:
                 "n_samples": genomics_card.get("training", {}).get("n_samples"),
             },
             "rationale": [
-                "Current artifact mixes SNPs with Age, BMI, and HbA1c, so it is not a clean standalone genomics signal.",
+                "Current artifact now excludes anthropometric and clinical overlap fields from the genomics feature set.",
                 "Extreme class imbalance makes the headline metrics unreliable for frontline screening decisions.",
             ],
             "risks": [

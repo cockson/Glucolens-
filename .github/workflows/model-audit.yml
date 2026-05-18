@@ -1,4 +1,4 @@
-name: Model Audit
+name: Quality Gates
 
 on:
   pull_request:
@@ -6,7 +6,7 @@ on:
     branches: [main]
 
 jobs:
-  tabular-strict-audit:
+  backend-model-governance:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -25,6 +25,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-audit.txt
 
+      - name: Check artifact freshness
+        run: |
+          python scripts/check_artifact_freshness.py
+
       - name: Run strict tabular audit
         env:
           PYTHONPATH: .
@@ -34,6 +38,10 @@ jobs:
             --output-dir artifacts/audit/tabular \
             --strict
 
+      - name: Backend syntax smoke check
+        run: |
+          python -m compileall app/ml app/services app/api/routes scripts
+
       - name: Upload audit artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -42,3 +50,25 @@ jobs:
           path: |
             backend/artifacts/audit/tabular/audit_report.json
             backend/artifacts/audit/tabular/calibration_oof.png
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build

@@ -15,10 +15,17 @@ ANTHRO_FEATURES = [
     "diastolic_bp",
     "bmi_category",
     "family_history_diabetes",
-    "fasting_glucose_mgdl",
-    "hba1c_pct",
     "physical_activity",
     "smoking_status",
+]
+
+# Diagnostic labs/treatment fields are intentionally excluded from model input.
+# They may be collected for reporting, but using them to predict a current
+# diabetes screening target leaks the answer.
+DIAGNOSTIC_LEAKAGE_FEATURES = [
+    "fasting_glucose_mgdl",
+    "hba1c_pct",
+    "on_antidiabetic",
 ]
 
 # Put genomics features you actually have (example placeholders):

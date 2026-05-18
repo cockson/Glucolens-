@@ -119,7 +119,8 @@ Target columns:
 
 Important feature note:
 1. `hip_circumference` is intentionally removed from current tabular/fusion input expectations.
-2. Current tabular feature set includes core vitals plus added fields such as `family_history_diabetes`, `fasting_glucose_mgdl`, `hba1c_pct`, `physical_activity`, `smoking_status`, `bmi_category`.
+2. Current retraining code uses core vitals plus non-diagnostic context such as `family_history_diabetes`, `physical_activity`, `smoking_status`, and `bmi_category`.
+3. Diagnostic lab fields such as `fasting_glucose_mgdl` and `hba1c_pct` may be captured for reports and clinical review, but are excluded from retrained tabular model features to avoid target leakage.
 
 ### 2) Genomics dataset
 Directory: `backend/data/genomics/`
@@ -133,9 +134,7 @@ Expected genomics feature examples in current model card:
 3. `MTNR1B_rs10830963`
 4. `SLC30A8_rs13266634`
 5. `PPARG_rs1801282`
-6. `Age`
-7. `BMI`
-8. `HbA1c`
+6. Clinical overlap fields such as `Age`, `BMI`, and `HbA1c` are excluded by the genomics preparation pipeline.
 
 ### 3) Skin image dataset
 Directory: `backend/data/skin/`
@@ -353,7 +352,7 @@ Run from `backend/`:
 python -m app.ml.tabular.prepare_training_data
 python -m app.ml.tabular.train_tabular_pro data/anthropometric_data/train_tabular.csv
 python -m app.ml.genomics.train_genomics_pro
-python -m app.ml.fusion.export_fusion_train
+python -m app.ml.fusion.regenerate_fusion_train_from_served
 python -m app.ml.fusion.train_fusion
 ```
 
@@ -367,7 +366,7 @@ Audit includes:
 1. Leakage checks (keyword scan + perfect-predictor bins + duplicate conflicts)
 2. Label-shuffle sanity AUROC test
 3. Group-split validation (site/patient when columns exist)
-4. Calibration plot export
+4. Calibration plot export when matplotlib is installed
 
 CI wiring:
 1. GitHub Actions workflow `.github/workflows/model-audit.yml` runs this strict audit on PRs and `main`.
@@ -375,14 +374,14 @@ CI wiring:
 
 ## Current Artifact Snapshot Metrics
 From current artifact JSON files:
-1. Tabular OOF AUROC: `0.9991`
-2. Tabular OOF Brier: `0.0218`
+1. Tabular OOF AUROC: `0.8877`
+2. Tabular OOF Brier: `0.3560`
 3. Retina validation AUROC: `0.9767`
 4. Retina validation Brier: `0.0126`
-5. Genomics AUC: `0.9992`
-6. Genomics Brier: `0.0038`
-7. Fusion summary AUROC: `1.0000`
-8. Fusion summary Brier: `0.0003`
+5. Genomics AUC: `0.6310`
+6. Genomics Brier: `0.0254`
+7. Fusion holdout AUROC: `0.9558`
+8. Fusion holdout Brier: `0.0772`
 
 These values are environment-state snapshots, not guarantees of external generalization.
 

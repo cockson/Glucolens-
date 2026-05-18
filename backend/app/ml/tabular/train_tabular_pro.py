@@ -47,7 +47,6 @@ OPTIONAL_FEATURES = [
     "whr", "pulse_pressure",
     "bmi_category", "central_obesity", "smoking_status", "alcohol_use", "physical_activity",
     "family_history_diabetes", "family_history_cvd", "hypertension_status",
-    "fasting_glucose_mgdl", "hba1c_pct",
     "total_cholesterol_mgdl", "hdl_mgdl", "ldl_mgdl", "triglycerides_mgdl",
     "cvd_risk_10yr_pct", "cvd_risk_category",
     "on_antihypertensive", "on_statin",
@@ -55,7 +54,22 @@ OPTIONAL_FEATURES = [
 
 FEATURES = REQUIRED_FEATURES + OPTIONAL_FEATURES
 MAX_MISSING_RATE = 0.45
-LEAKY_COLS = {"label", "on_antidiabetic", "diabetes", "diabetes_dx"}
+LEAKY_COLS = {
+    "label",
+    "on_antidiabetic",
+    "diabetes",
+    "diabetes_dx",
+    "fasting_glucose_mgdl",
+    "hba1c_pct",
+}
+LEAKAGE_POLICY = {
+    "excluded_diagnostic_features": ["fasting_glucose_mgdl", "hba1c_pct", "on_antidiabetic"],
+    "reason": (
+        "The tabular target is a current screening class. Diagnostic labs or treatment "
+        "markers can directly encode that class, so they are collected for clinical "
+        "context/reporting but excluded from model training features."
+    ),
+}
 
 COL_ALIASES = {
     "diabete_status": "diabetes_status",
@@ -359,7 +373,7 @@ def main(csv_path: str):
     for c in nums_inferred:
         X[c] = pd.to_numeric(X[c], errors="coerce")
     for c in cats_inferred:
-        X[c] = X[c].astype("object")
+        X[c] = X[c].astype("object").where(X[c].isna(), X[c].astype(str))
 
     # ---- External validation: site-held-out by source_file ----
     if SOURCE_COL in df.columns and df[SOURCE_COL].nunique() >= 3:
@@ -580,6 +594,8 @@ def main(csv_path: str):
             },
             "classes": class_names,
             "target_index_diabetic": int(diabetic_idx),
+            "target_design": "current_screening_classifier",
+            "leakage_policy": LEAKAGE_POLICY,
         },
         "best": {
             "oof": best["oof"],
@@ -657,7 +673,9 @@ def main(csv_path: str):
         "model_version": version,
         "classes": class_names,
         "target_index_diabetic": int(diabetic_idx),
+        "target_design": "current_screening_classifier",
         "features": feature_cols,
+        "leakage_policy": LEAKAGE_POLICY,
         "pipeline": {
             "preprocess": "median impute + scale numeric; most_frequent impute + onehot categorical",
             "imbalance": "SMOTE inside CV" if best["use_smote"] else "class_weight/balanced only",

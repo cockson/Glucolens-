@@ -1,18 +1,24 @@
 {
   "model_name": "genomics_logreg",
-  "model_version": "20260301_044358",
+  "model_version": "20260509_193839",
   "task": "binary classification",
   "target": "diabetes_proxy_positive",
+  "feature_policy": "genomic_only_no_anthropometric_overlap",
   "features": [
     "TCF7L2_rs7903146",
     "KCNQ1_rs2237892",
     "MTNR1B_rs10830963",
     "SLC30A8_rs13266634",
-    "PPARG_rs1801282",
-    "Age",
-    "BMI",
-    "HbA1c"
+    "PPARG_rs1801282"
   ],
+  "excluded_features": {
+    "reason": "Removed anthropometric/clinical overlap from genomics model to avoid duplicated signal and leakage.",
+    "columns": [
+      "Age",
+      "BMI",
+      "HbA1c"
+    ]
+  },
   "calibration": "isotonic",
   "training": {
     "n_samples": 1000,
@@ -20,8 +26,8 @@
     "cv_outer_splits": 5
   },
   "metrics_oof": {
-    "auc": 0.9992102353498657,
-    "brier": 0.003825111108039679,
+    "auc": 0.6310022113410204,
+    "brier": 0.025418613875357092,
     "n_samples": 1000,
     "positive_rate": 0.974
   }

@@ -9,10 +9,29 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import roc_auc_score, brier_score_loss, accuracy_score, f1_score
 
+SCREENING_FOLLOW_UP_WINDOWS = {
+    "3_months": {
+        "window_months": 3,
+        "high_risk_threshold": 0.62,
+        "intermediate_risk_threshold": 0.35,
+    },
+    "6_months": {
+        "window_months": 6,
+        "high_risk_threshold": 0.45,
+        "intermediate_risk_threshold": 0.22,
+    },
+    "12_months": {
+        "window_months": 12,
+        "high_risk_threshold": 0.30,
+        "intermediate_risk_threshold": 0.12,
+    },
+}
+
 # Resolve paths relative to backend repo root regardless of cwd.
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 ART_DIR = os.path.join(REPO_ROOT, "artifacts", "fusion")
 os.makedirs(ART_DIR, exist_ok=True)
+TRAIN_METADATA_PATH = os.path.join(REPO_ROOT, "data", "fusion_train.metadata.json")
 
 def _metric_pack(y_true, p):
     y_hat = (p >= 0.5).astype(int)
@@ -26,17 +45,23 @@ def _metric_pack(y_true, p):
 def _build_features(df: pd.DataFrame):
     # Gate modality probabilities by quality flags.
     df = df.copy()
-    df["p_retina_eff"] = df["p_retina"] * df["retina_ok"]
-    df["p_skin_eff"] = df["p_skin"] * df["skin_ok"]
-    df["p_genomics_eff"] = df["p_genomics"] * df["geno_ok"]
+    df["p_retina_eff"] = np.where(df["retina_ok"].astype(bool), df["p_retina"], 0.0)
+    df["p_skin_eff"] = np.where(df["skin_ok"].astype(bool), df["p_skin"], 0.0)
+    df["p_genomics_eff"] = np.where(df["geno_ok"].astype(bool), df["p_genomics"], 0.0)
 
-    eff_cols = ["p_tabular", "p_retina_eff", "p_skin_eff", "p_genomics_eff"]
-    arr = df[eff_cols].to_numpy(dtype=float)
-    valid = np.isfinite(arr)
+    active_arr = np.column_stack(
+        [
+            df["p_tabular"].to_numpy(dtype=float),
+            np.where(df["retina_ok"].astype(bool), df["p_retina"].to_numpy(dtype=float), np.nan),
+            np.where(df["skin_ok"].astype(bool), df["p_skin"].to_numpy(dtype=float), np.nan),
+            np.where(df["geno_ok"].astype(bool), df["p_genomics"].to_numpy(dtype=float), np.nan),
+        ]
+    )
+    valid = np.isfinite(active_arr)
     counts = valid.sum(axis=1).clip(min=1)
-    arr_zeros = np.where(valid, arr, 0.0)
-    arr_nanmax = np.where(valid, arr, -np.inf)
-    arr_nanmin = np.where(valid, arr, np.inf)
+    arr_zeros = np.where(valid, active_arr, 0.0)
+    arr_nanmax = np.where(valid, active_arr, -np.inf)
+    arr_nanmin = np.where(valid, active_arr, np.inf)
 
     df["p_mean_active"] = arr_zeros.sum(axis=1) / counts
     df["p_max_active"] = np.where(np.isfinite(arr_nanmax.max(axis=1)), arr_nanmax.max(axis=1), 0.0)
@@ -78,6 +103,13 @@ def main():
     df = df.dropna(subset=["p_tabular","label"])
     if df.empty:
         raise SystemExit("fusion_train.csv has no usable rows after dropna. Check required columns.")
+    training_data_metadata = None
+    if os.path.isfile(TRAIN_METADATA_PATH):
+        try:
+            with open(TRAIN_METADATA_PATH, "r", encoding="utf-8") as f:
+                training_data_metadata = json.load(f)
+        except Exception:
+            training_data_metadata = None
 
     # Optional modality columns may be absent in older exports.
     for col, default in (("p_retina", 0.0), ("retina_ok", 0), ("p_skin", 0.0), ("skin_ok", 0), ("p_genomics", 0.0), ("geno_ok", 0)):
@@ -201,6 +233,15 @@ def main():
         "metrics_oof": metrics_summary,
         "metrics_holdout": metrics_holdout,
         "metrics_train": metrics_train,
+        "training_data": training_data_metadata,
+        "screening_follow_up_windows": SCREENING_FOLLOW_UP_WINDOWS,
+        "target_design": "current_screening_classifier",
+        "horizon_training_note": (
+            "This artifact predicts current screening-positive probability. "
+            "3/6/12 month outputs are operational follow-up bands, not separate "
+            "event-risk targets, because the training set does not contain dated "
+            "longitudinal event labels per horizon."
+        ),
         "estimator": estimator
     }
 
@@ -209,11 +250,19 @@ def main():
 
     with open(os.path.join(ART_DIR,"performance.json"),"w",encoding="utf-8") as f:
         json.dump({
+            "current": {
+                "model_name": model_name,
+                "model_version": version,
+            },
             "metrics_summary": metrics_summary,
             "metrics_holdout": metrics_holdout,
             "metrics_train": metrics_train,
             "calibration": calibration_used,
             "n_samples": int(n_samples),
+            "training_data": training_data_metadata,
+            "screening_follow_up_windows": SCREENING_FOLLOW_UP_WINDOWS,
+            "target_design": "current_screening_classifier",
+            "horizon_training_note": bundle["horizon_training_note"],
         }, f, indent=2)
 
     model_ref = os.path.relpath(model_path, REPO_ROOT).replace(os.sep, "/")
@@ -224,7 +273,32 @@ def main():
             "model_path": model_ref
         }}, f, indent=2)
 
-    print("Saved fusion model + registry.")
+    model_card = {
+        "model_name": model_name,
+        "model_version": version,
+        "classes": bundle["classes"],
+        "features": feature_cols,
+        "calibration": calibration_used,
+        "base_model_params": base_params,
+        "target_design": bundle["target_design"],
+        "screening_follow_up_windows": SCREENING_FOLLOW_UP_WINDOWS,
+        "horizon_training_note": bundle["horizon_training_note"],
+        "metrics_summary": metrics_summary,
+        "metrics_holdout": metrics_holdout,
+        "metrics_train": metrics_train,
+        "training_data": training_data_metadata,
+        "intended_use": "Fusion screening support using tabular risk plus optional retina, skin, and genomics signals. Not a diagnosis.",
+        "limitations": [
+            "Current local training data may be tabular-only if linked modality outcomes are unavailable.",
+            "3/6/12 month outputs are operational follow-up bands, not true horizon-specific event-risk predictions.",
+            "Prospective external validation is required before clinical deployment.",
+        ],
+        "created_at_utc": dt.datetime.utcnow().isoformat() + "Z",
+    }
+    with open(os.path.join(ART_DIR, "modelcard.json"), "w", encoding="utf-8") as f:
+        json.dump(model_card, f, indent=2)
+
+    print("Saved fusion model + registry + model card.")
 
 if __name__ == "__main__":
     main()

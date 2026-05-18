@@ -1,8 +1,50 @@
 {
-  "current": {
-    "model_name": "fusion_logreg_v3",
-    "model_version": "20260518_141508"
+  "model_name": "fusion_logreg_v3",
+  "model_version": "20260518_141508",
+  "classes": [
+    "screen_negative",
+    "screen_positive_refer"
+  ],
+  "features": [
+    "p_tabular",
+    "p_retina_eff",
+    "p_skin_eff",
+    "p_genomics_eff",
+    "retina_ok",
+    "skin_ok",
+    "geno_ok",
+    "p_mean_active",
+    "p_max_active",
+    "p_min_active",
+    "p_range_active",
+    "n_modalities_active",
+    "tab_retina_gap",
+    "tab_skin_gap"
+  ],
+  "calibration": "sigmoid",
+  "base_model_params": {
+    "C": 0.5,
+    "class_weight": null
   },
+  "target_design": "current_screening_classifier",
+  "screening_follow_up_windows": {
+    "3_months": {
+      "window_months": 3,
+      "high_risk_threshold": 0.62,
+      "intermediate_risk_threshold": 0.35
+    },
+    "6_months": {
+      "window_months": 6,
+      "high_risk_threshold": 0.45,
+      "intermediate_risk_threshold": 0.22
+    },
+    "12_months": {
+      "window_months": 12,
+      "high_risk_threshold": 0.3,
+      "intermediate_risk_threshold": 0.12
+    }
+  },
+  "horizon_training_note": "This artifact predicts current screening-positive probability. 3/6/12 month outputs are operational follow-up bands, not separate event-risk targets, because the training set does not contain dated longitudinal event labels per horizon.",
   "metrics_summary": {
     "auroc": 0.9558,
     "brier": 0.07722448264356507,
@@ -21,8 +63,6 @@
     "accuracy": 0.8775850567044696,
     "f1": 0.8193008370260956
   },
-  "calibration": "sigmoid",
-  "n_samples": 2998,
   "training_data": {
     "source": "oof_tabular_non_leaky_diagnostic_fields_suppressed",
     "input_csv": "data/anthropometric_data/train_tabular.csv",
@@ -81,23 +121,11 @@
       "Use real linked modality predictions when available; this file is a non-leaky tabular-only fusion training fallback."
     ]
   },
-  "screening_follow_up_windows": {
-    "3_months": {
-      "window_months": 3,
-      "high_risk_threshold": 0.62,
-      "intermediate_risk_threshold": 0.35
-    },
-    "6_months": {
-      "window_months": 6,
-      "high_risk_threshold": 0.45,
-      "intermediate_risk_threshold": 0.22
-    },
-    "12_months": {
-      "window_months": 12,
-      "high_risk_threshold": 0.3,
-      "intermediate_risk_threshold": 0.12
-    }
-  },
-  "target_design": "current_screening_classifier",
-  "horizon_training_note": "This artifact predicts current screening-positive probability. 3/6/12 month outputs are operational follow-up bands, not separate event-risk targets, because the training set does not contain dated longitudinal event labels per horizon."
+  "intended_use": "Fusion screening support using tabular risk plus optional retina, skin, and genomics signals. Not a diagnosis.",
+  "limitations": [
+    "Current local training data may be tabular-only if linked modality outcomes are unavailable.",
+    "3/6/12 month outputs are operational follow-up bands, not true horizon-specific event-risk predictions.",
+    "Prospective external validation is required before clinical deployment."
+  ],
+  "created_at_utc": "2026-05-18T14:15:08.462377Z"
 }

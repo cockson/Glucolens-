@@ -10,10 +10,10 @@ DEFAULT_FILES = [
     "ncd_moderate_ncd_burden.csv",
     "ncd_low_ncd_burden.csv",
 ]
-# Keep both outputs for backward compatibility with existing scripts.
+# Keep the canonical tabular output. Older typo-path exports are no longer
+# written because they encourage duplicate datasets and accidental stale inputs.
 OUT_FILES = [
     "data/anthropometric_data/train_tabular.csv",
-    "data/ropometric_data/train_tabular.csv",
 ]
 
 # ---- Column alias mapping (handles different naming across files) ----
