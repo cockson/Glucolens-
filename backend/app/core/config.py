@@ -1,3 +1,5 @@
+from urllib.parse import urlsplit
+
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
@@ -36,8 +38,17 @@ class Settings(BaseSettings):
 
     @property
     def sqlalchemy_database_url(self) -> str:
-        if self.DATABASE_URL.startswith("postgres://"):
-            return self.DATABASE_URL.replace("postgres://", "postgresql://", 1)
-        return self.DATABASE_URL
+        database_url = self.DATABASE_URL
+        if database_url.startswith("postgres://"):
+            database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+        parsed = urlsplit(database_url)
+        if self.ENV == "prod" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}:
+            raise RuntimeError(
+                "Invalid production DATABASE_URL: Render is using a localhost database URL. "
+                "Set DATABASE_URL to the Render PostgreSQL internal connection string."
+            )
+
+        return database_url
 
 settings = Settings()

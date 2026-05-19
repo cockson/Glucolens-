@@ -74,6 +74,7 @@ for candidate in settings.CORS_ALLOW_ORIGINS.split(","):
 
 for candidate in (
     settings.FRONTEND_BASE_URL,
+    "https://glucolens-frontend.onrender.com",
     "https://glucolens.pages.com",
     "https://glucolens.pages.dev",
 ):
@@ -82,6 +83,7 @@ for candidate in (
         origins.append(normalized_origin)
 
 origin_regex_parts = [
+    r"^https://[a-zA-Z0-9-]+\.onrender\.com$",
     r"^https://(?:[a-zA-Z0-9-]+\.)?[a-zA-Z0-9-]+\.pages\.dev$",
     r"^https://[a-zA-Z0-9-]+-\d+\.app\.github\.dev$",
 ]

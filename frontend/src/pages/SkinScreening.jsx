@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { api, SCREENING_TIMEOUT_MS } from "../lib/api";
+import { api, API_URL, SCREENING_TIMEOUT_MS } from "../lib/api";
 import Locked from "./Locked.jsx";
 import { isLockedError, lockedMessage } from "../lib/errors";
 
@@ -43,7 +43,7 @@ export default function SkinScreening(){
 
   function downloadPdf(){
     if(!predId) return;
-    window.open(`${import.meta.env.VITE_API_URL}/api/skin/report/${predId}`, "_blank");
+    window.open(`${API_URL}/api/skin/report/${predId}`, "_blank");
   }
 
   if (locked) return <Locked message={locked} />;
