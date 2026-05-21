@@ -30,7 +30,7 @@ services:
       - key: SETUP_TOKEN
         generateValue: true
       - key: API_BASE_URL
-        value: https://glucolens-backend.onrender.com
+        value: https://glucolens-backend-vtnp.onrender.com
       - key: FRONTEND_BASE_URL
         value: https://glucolens-frontend.onrender.com
       - key: CORS_ALLOW_ORIGINS
@@ -65,7 +65,7 @@ services:
     autoDeploy: true
     envVars:
       - key: VITE_API_URL
-        value: https://glucolens-backend.onrender.com
+        value: https://glucolens-backend-vtnp.onrender.com
       - key: VITE_API_TIMEOUT_MS
         value: "90000"
       - key: VITE_PAYSTACK_PUBLIC_KEY
