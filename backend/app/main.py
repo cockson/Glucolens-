@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -138,8 +140,15 @@ def database_health():
 # --- Startup ---
 @app.on_event("startup")
 async def on_startup():
-    # Ensure schema exists for environments that do not run separate migrations.
-    init_db()
+    async def init_db_background():
+        try:
+            await asyncio.to_thread(init_db)
+            print("Database schema initialization completed.")
+        except Exception as exc:
+            print(f"Database schema initialization failed: {type(exc).__name__}: {exc}")
+
+    # Do not block the web server from binding to $PORT during Render deploys.
+    asyncio.create_task(init_db_background())
 
     if settings.REDIS_URL:
         try:
