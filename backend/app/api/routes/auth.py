@@ -1,6 +1,7 @@
 import datetime as dt
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from app.core.rate_limit import limiter
 from slowapi.util import get_remote_address
@@ -31,31 +32,40 @@ def _utcnow():
     return dt.datetime.utcnow()
 
 
+def _auth_db_error(exc: Exception) -> HTTPException:
+    return HTTPException(
+        status_code=503,
+        detail=f"auth_database_unavailable: {type(exc).__name__}: {str(exc)}",
+    )
+
+
 # ---------- Public Registration ----------
 @router.post("/register-public")
 @limiter.limit("5/minute")
 def register_public(request: Request, payload: RegisterPublicIn, db: Session = Depends(get_db)):
     email = payload.email.strip().lower()
 
-    existing = db.query(User).filter(User.email == email).first()
-    if existing:
-        raise HTTPException(status_code=409, detail="Email already registered")
-
-    user = User(
-        id=_uuid(),
-        email=email,
-        password_hash=hash_password(payload.password),
-        role=Role.public,
-        org_id=None,
-        facility_id=None,
-    )
-
     try:
+        existing = db.query(User).filter(User.email == email).first()
+        if existing:
+            raise HTTPException(status_code=409, detail="Email already registered")
+
+        user = User(
+            id=_uuid(),
+            email=email,
+            password_hash=hash_password(payload.password),
+            role=Role.public,
+            org_id=None,
+            facility_id=None,
+        )
         db.add(user)
         db.commit()
-    except Exception:
+    except HTTPException:
         db.rollback()
         raise
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise _auth_db_error(exc)
 
     return MeOut(
         id=user.id,
@@ -72,11 +82,11 @@ def register_public(request: Request, payload: RegisterPublicIn, db: Session = D
 def register_business(request: Request, payload: RegisterBusinessIn, db: Session = Depends(get_db)):
     email = payload.email.strip().lower()
 
-    existing = db.query(User).filter(User.email == email).first()
-    if existing:
-        raise HTTPException(status_code=409, detail="Email already registered")
-
     try:
+        existing = db.query(User).filter(User.email == email).first()
+        if existing:
+            raise HTTPException(status_code=409, detail="Email already registered")
+
         # Create organization
         org = Org(
             id=_uuid(),
@@ -110,9 +120,12 @@ def register_business(request: Request, payload: RegisterBusinessIn, db: Session
         db.add(user)
         db.commit()
 
-    except Exception:
+    except HTTPException:
         db.rollback()
         raise
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise _auth_db_error(exc)
 
     return MeOut(
         id=user.id,
@@ -129,7 +142,11 @@ def register_business(request: Request, payload: RegisterBusinessIn, db: Session
 def login(request: Request, payload: LoginIn, db: Session = Depends(get_db)):
     email = payload.email.strip().lower()
 
-    user = db.query(User).filter(User.email == email).first()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise _auth_db_error(exc)
 
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -161,9 +178,9 @@ def login(request: Request, payload: LoginIn, db: Session = Depends(get_db)):
     try:
         db.add(token_row)
         db.commit()
-    except Exception:
+    except SQLAlchemyError as exc:
         db.rollback()
-        raise
+        raise _auth_db_error(exc)
 
     return TokenOut(
         access_token=access,

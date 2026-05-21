@@ -1,9 +1,11 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 from app.api.routes import admin
 from app.core.config import settings
 from app.db.init_db import init_db
+from app.db.session import engine
 from app.api.routes import auth, tenancy, billing, referral, outcome
 from app.api.routes import audit
 from app.api.routes import predict
@@ -45,7 +47,13 @@ if RATE_LIMITING_ENABLED:
 # --- Security headers ---
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        response = JSONResponse(
+            status_code=500,
+            content={"detail": f"internal_server_error: {type(exc).__name__}: {str(exc)}"},
+        )
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
@@ -106,6 +114,24 @@ app.add_middleware(
 @app.get("/health")
 def health():
     return {"status": "ok", "env": settings.ENV}
+
+
+@app.get("/health/db")
+def database_health():
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as exc:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "error",
+                "env": settings.ENV,
+                "database": "unavailable",
+                "error": f"{type(exc).__name__}: {str(exc)}",
+            },
+        )
+    return {"status": "ok", "env": settings.ENV, "database": "ok"}
 
 
 

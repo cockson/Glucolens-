@@ -37,7 +37,7 @@ export default function RegisterBusiness() {
       if (Array.isArray(detail)) {
         setErr(detail.map((x) => x?.msg || "Invalid input").join(", "));
       } else {
-        setErr(detail || "Registration failed");
+        setErr(detail || e2?.message || "Registration failed");
       }
     }
   }

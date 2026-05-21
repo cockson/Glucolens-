@@ -66,6 +66,8 @@ services:
     envVars:
       - key: VITE_API_URL
         value: https://glucolens-backend.onrender.com
+      - key: VITE_API_TIMEOUT_MS
+        value: "90000"
       - key: VITE_PAYSTACK_PUBLIC_KEY
         sync: false
       - key: VITE_DEFAULT_COUNTRY
